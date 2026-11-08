@@ -1,0 +1,16 @@
+# Build output
+build/
+.gradle/
+.kotlin/
+captures/
+
+# Local machine config
+local.properties
+.idea/
+*.iml
+.DS_Store
+
+# Signing secrets: never commit these (this repo is public)
+keystore.properties
+*.jks
+*.keystore
