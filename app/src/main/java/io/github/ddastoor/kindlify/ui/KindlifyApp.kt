@@ -59,6 +59,7 @@ fun KindlifyApp(vm: AppViewModel) {
                 picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
             },
             onCreateEpub = vm::createEpub,
+            onFetch = vm::fetchContents,
             onExport = {
                 val file = vm.epubFile(project)
                 if (file == null) {

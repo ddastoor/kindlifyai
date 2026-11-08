@@ -23,8 +23,8 @@ android {
         applicationId = "io.github.ddastoor.kindlify"
         minSdk = 29
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.2"
+        versionCode = 4
+        versionName = "1.3"
     }
 
     signingConfigs {
@@ -57,6 +57,11 @@ android {
 
     testOptions {
         unitTests.isIncludeAndroidResources = true
+        unitTests.all {
+            // jsoup downloads with java.net.http on a desktop JVM but HttpURLConnection on
+            // Android; make tests use the same path as the phone.
+            it.systemProperty("jsoup.useHttpClient", "false")
+        }
     }
 
     packaging {
@@ -71,6 +76,10 @@ kotlin {
 dependencies {
     // EPUB module, as a single jar with kxml2 relocated (see epub/build.gradle.kts).
     implementation(project(path = ":epub", configuration = "shadow"))
+
+    // Reader mode for "Fetch contents": Readability4J (a port of Mozilla's Readability) on jsoup.
+    implementation("net.dankito.readability4j:readability4j:1.0.8")
+    implementation("org.jsoup:jsoup:1.24.1") // newer than the 1.11.2 Readability4J was built with
 
     val composeBom = platform("androidx.compose:compose-bom:2025.12.00")
     implementation(composeBom)

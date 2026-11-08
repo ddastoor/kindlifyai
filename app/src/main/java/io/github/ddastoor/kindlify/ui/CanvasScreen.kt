@@ -94,6 +94,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.github.ddastoor.kindlify.data.Block
 import io.github.ddastoor.kindlify.data.Project
+import io.github.ddastoor.kindlify.data.soleLink
+import androidx.compose.material3.OutlinedButton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -115,7 +117,9 @@ fun CanvasScreen(
     onAddImage: () -> Unit,
     onCreateEpub: (title: String) -> Unit,
     onExport: () -> Unit,
+    onFetch: () -> Unit,
 ) {
+    val canFetch = remember(project.blocks) { project.soleLink() != null }
     var confirmDiscard by rememberSaveable { mutableStateOf(false) }
     var askTitle by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -165,8 +169,10 @@ fun CanvasScreen(
             if (!keyboardOpen) {
                 CanvasActions(
                     hasContent = project.blocks.isNotEmpty(),
+                    canFetch = canFetch,
                     epubReady = project.hasCurrentEpub,
                     busy = busy,
+                    onFetch = onFetch,
                     onCreateEpub = { askTitle = true },
                     onExport = onExport,
                 )
@@ -249,8 +255,10 @@ fun CanvasScreen(
 @Composable
 private fun CanvasActions(
     hasContent: Boolean,
+    canFetch: Boolean,
     epubReady: Boolean,
     busy: Boolean,
+    onFetch: () -> Unit,
     onCreateEpub: () -> Unit,
     onExport: () -> Unit,
 ) {
@@ -268,6 +276,7 @@ private fun CanvasActions(
                 text = when {
                     busy -> "Working…"
                     !hasContent -> "Copy text or images in any app, then tap Paste."
+                    canFetch -> "Just a link: Fetch contents pulls in the page's article."
                     epubReady -> "EPUB ready. Export sends it to your Kindle app."
                     else -> "When you're done, create the EPUB."
                 },
@@ -275,6 +284,17 @@ private fun CanvasActions(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 10.dp),
             )
+            // Only usable when the canvas holds nothing but a link.
+            OutlinedButton(
+                onClick = onFetch,
+                enabled = canFetch && !busy,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+            ) {
+                Icon(AppIcons.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Fetch contents")
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 FilledTonalButton(
                     onClick = onCreateEpub,

@@ -103,12 +103,22 @@ class ContentImporter(private val context: Context, private val store: ProjectSt
     fun importImage(projectId: String, uri: Uri): Block.Image {
         // Copy the bytes right away: access to another app's clipboard/shared file can be short-lived.
         val bytes = context.contentResolver.openInputStream(uri)!!.use { it.readNBytesCompat(MAX_IMAGE_BYTES + 1) }
+        return importImageBytes(projectId, bytes)
+    }
+
+    /**
+     * Same as [importImage], from the image's bytes (e.g. downloaded from a web page).
+     * Images smaller than [minSide] px on either side are rejected with [ImageTooSmall]
+     * (used to skip icons and tracking pixels on web pages).
+     */
+    fun importImageBytes(projectId: String, bytes: ByteArray, minSide: Int = 0): Block.Image {
         require(bytes.size <= MAX_IMAGE_BYTES) { "Image is too large" }
         val source = ImageDecoder.createSource(ByteBuffer.wrap(bytes))
         val bitmap = ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
             decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
             val w = info.size.width
             val h = info.size.height
+            if (minOf(w, h) < minSide) throw ImageTooSmall()
             val longest = max(w, h)
             if (longest > MAX_IMAGE_SIDE) {
                 val scale = MAX_IMAGE_SIDE.toFloat() / longest
@@ -134,6 +144,8 @@ class ContentImporter(private val context: Context, private val store: ProjectSt
         val type = runCatching { context.contentResolver.getType(uri) }.getOrNull()
         return type?.startsWith("image/") ?: description.hasMimeType("image/*")
     }
+
+    class ImageTooSmall : Exception("Image too small")
 
     companion object {
         const val MAX_IMAGE_SIDE = 2000

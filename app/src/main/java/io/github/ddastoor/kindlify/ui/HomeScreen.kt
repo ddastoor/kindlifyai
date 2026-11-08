@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.github.ddastoor.kindlify.AppViewModel
 import io.github.ddastoor.kindlify.BuildConfig
 import io.github.ddastoor.kindlify.data.Block
 import io.github.ddastoor.kindlify.data.Project
@@ -101,6 +102,15 @@ fun HomeScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                item(key = "history-note") {
+                    Text(
+                        "Your ${AppViewModel.MAX_CANVASES} most recently edited canvases are kept. " +
+                            "Starting another one removes the oldest.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 4.dp),
+                    )
+                }
                 items(projects, key = { it.id }) { project ->
                     ProjectCard(project, onClick = { onOpen(project) })
                 }

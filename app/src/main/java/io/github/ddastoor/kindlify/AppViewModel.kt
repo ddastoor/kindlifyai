@@ -16,6 +16,8 @@ import io.github.ddastoor.kindlify.data.ContentImporter
 import io.github.ddastoor.kindlify.data.Pasted
 import io.github.ddastoor.kindlify.data.Project
 import io.github.ddastoor.kindlify.data.ProjectStore
+import io.github.ddastoor.kindlify.data.WebImporter
+import io.github.ddastoor.kindlify.data.soleLink
 import io.github.ddastoor.kindlify.epub.EpubBlock
 import io.github.ddastoor.kindlify.epub.EpubBuilder
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +36,7 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
 
     val store = ProjectStore(app.filesDir)
     private val importer = ContentImporter(app, store)
+    private val web = WebImporter(importer)
 
     /** All disk writes go through this one-at-a-time dispatcher, so saves never overlap. */
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -66,11 +69,29 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
     fun newCanvas(title: String? = null): Project {
         flush()
         val now = System.currentTimeMillis()
-        val name = title ?: ("Untitled " + DateFormat.format("d MMM yyyy, HH:mm", now))
+        val name = title ?: (DEFAULT_TITLE_PREFIX + DateFormat.format("d MMM yyyy, HH:mm", now))
         val project = Project(UUID.randomUUID().toString(), name, now, now, emptyList())
         show(project)
         save(project)
+        // Runs after the save above (the disk dispatcher is one-at-a-time), so the new canvas counts.
+        viewModelScope.launch {
+            projects = withContext(disk) {
+                pruneHistory(keepId = project.id)
+                store.list()
+            }
+        }
         return project
+    }
+
+    /**
+     * Keeps the [MAX_CANVASES] most recently edited canvases (the order of the home screen
+     * list) and deletes the rest, with their images and EPUBs. Never deletes [keepId].
+     */
+    private fun pruneHistory(keepId: String) {
+        store.list()
+            .filter { it.id != keepId }
+            .drop(MAX_CANVASES - 1)
+            .forEach { store.delete(it.id) }
     }
 
     /**
@@ -189,6 +210,41 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
         }
     }
 
+    // ---- Fetch contents ----
+
+    /**
+     * The Fetch contents button: when the canvas holds only a link, downloads that page
+     * in reader mode and appends its text and pictures after a separator, keeping the link.
+     */
+    fun fetchContents() {
+        val project = current ?: return
+        val url = project.soleLink() ?: run {
+            message("Fetch contents works when the canvas has only a link in it.")
+            return
+        }
+        busy = true
+        viewModelScope.launch {
+            val result = runCatching { web.fetch(project.id, url) }
+            busy = false
+            val page = result.getOrElse {
+                Log.w(TAG, "Fetching $url failed", it)
+                message("Couldn't fetch the page: ${it.message ?: it.javaClass.simpleName}")
+                return@launch
+            }
+            if (current?.id != project.id) return@launch
+            if (page.blocks.isEmpty()) {
+                message("Couldn't find any readable content on that page.")
+                return@launch
+            }
+            edit { p ->
+                // A canvas still on its automatic "Untitled <date>" name takes the article's title.
+                val title = if (p.title.startsWith(DEFAULT_TITLE_PREFIX) && !page.title.isNullOrBlank()) page.title else p.title
+                p.copy(title = title, blocks = p.blocks + Block.Separator(UUID.randomUUID().toString()) + page.blocks)
+            }
+            message("Page contents added below the link.")
+        }
+    }
+
     // ---- EPUB ----
 
     fun epubFile(project: Project): File? = if (project.hasCurrentEpub) store.epubFile(project) else null
@@ -293,6 +349,10 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
     companion object {
         private const val KEY_OPEN = "open_project"
         private const val TAG = "Kindlify"
+        private const val DEFAULT_TITLE_PREFIX = "Untitled "
+
+        /** How many canvases are kept; creating one more deletes the least recently edited. */
+        const val MAX_CANVASES = 20
 
         fun fileNameFor(title: String): String {
             val safe = title.replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), " ")
