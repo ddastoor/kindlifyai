@@ -58,6 +58,7 @@ class CanvasFlowTest {
     @Test
     fun pasteTextAndImage_createEpub_exportToKindle_thenCancel() {
         compose.onNodeWithText("No canvases yet").assertIsDisplayed()
+        compose.onNodeWithText("v${BuildConfig.VERSION_NAME}").assertIsDisplayed()
         compose.screenshot("01-home-empty")
 
         compose.onNodeWithText("New canvas").performClick()

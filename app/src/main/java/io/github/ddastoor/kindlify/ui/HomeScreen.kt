@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.github.ddastoor.kindlify.BuildConfig
 import io.github.ddastoor.kindlify.data.Block
 import io.github.ddastoor.kindlify.data.Project
 
@@ -44,7 +45,19 @@ fun HomeScreen(
     onOpen: (Project) -> Unit,
 ) {
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Kindlify") }) },
+        topBar = {
+            TopAppBar(
+                title = { Text("Kindlify") },
+                actions = {
+                    Text(
+                        "v${BuildConfig.VERSION_NAME}",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(end = 16.dp),
+                    )
+                },
+            )
+        },
         floatingActionButton = {
             // The content-lambda variant keeps the label visible to TalkBack (and tests).
             ExtendedFloatingActionButton(onClick = onNew) {

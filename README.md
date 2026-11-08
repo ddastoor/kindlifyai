@@ -20,7 +20,7 @@ Everything is saved as you go, in the app's private storage. Nothing is sent any
 
 ## Install
 
-The latest build is in the repo: [`apk/Kindlify.apk`](apk/Kindlify.apk) (version 1.1).
+The latest build is in the repo: [`apk/Kindlify.apk`](apk/Kindlify.apk) (version 1.2).
 On the phone, download it from
 <https://github.com/ddastoor/kindlifyai/raw/main/apk/Kindlify.apk>, open it, and allow installing apps
 from that source (your browser or Files app) when Android asks. Requires Android 10 or newer.
