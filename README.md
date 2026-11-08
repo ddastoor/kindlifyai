@@ -22,13 +22,14 @@ A small, private Android app: collect text and images on a **canvas**, turn it i
   The back arrow keeps it on the home screen, where you can reopen it to keep working.
 - **History**: the 20 most recently edited canvases are kept on the home screen. Starting a 21st deletes
   the one at the bottom of the list (the least recently edited), along with its pictures and EPUB.
+  **Long-press** a canvas to delete it, or use **Delete all** at the top to clear the list (both ask first).
 
 Everything is saved as you go, in the app's private storage. The app only goes online for Fetch contents
 (to download that page and its pictures); nothing leaves the phone until you tap Export.
 
 ## Install
 
-The latest build is in the repo: [`apk/Kindlify.apk`](apk/Kindlify.apk) (version 1.3).
+The latest build is in the repo: [`apk/Kindlify.apk`](apk/Kindlify.apk) (version 1.4).
 On the phone, download it from
 <https://github.com/ddastoor/kindlifyai/raw/main/apk/Kindlify.apk>, open it, and allow installing apps
 from that source (your browser or Files app) when Android asks. Requires Android 10 or newer.
@@ -98,7 +99,8 @@ canvases) if the signature matches. Without `keystore.properties` the build fall
   - sharing into the app: new canvas when none is open, appended after a separator when one is, and from a cold start;
   - Fetch contents against a local test web server (button only enabled for a lone link, ads and menus
     dropped, pictures kept in order, EPUB created from it), and a page that can't be fetched;
-  - keeping 20 canvases: starting the 21st removes the least recently edited.
+  - keeping 20 canvases: starting the 21st removes the least recently edited;
+  - long-press to delete one canvas, and Delete all.
 - Reader mode on a sample news page, and link detection, as plain unit tests.
 
   Screenshots are saved to `app/build/screenshots/`.

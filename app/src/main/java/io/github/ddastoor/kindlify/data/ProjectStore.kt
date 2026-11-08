@@ -48,6 +48,11 @@ class ProjectStore(filesDir: File) {
         projectDir(id).deleteRecursively()
     }
 
+    /** Deletes every canvas and everything stored with them. */
+    fun deleteAll() {
+        root.deleteRecursively()
+    }
+
     private fun toJson(p: Project) = JSONObject().apply {
         put("id", p.id)
         put("title", p.title)

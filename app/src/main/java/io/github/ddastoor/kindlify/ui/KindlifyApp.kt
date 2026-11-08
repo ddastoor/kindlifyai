@@ -41,6 +41,8 @@ fun KindlifyApp(vm: AppViewModel) {
             snackbar = snackbar,
             onNew = { vm.newCanvas() },
             onOpen = vm::open,
+            onDelete = vm::delete,
+            onDeleteAll = vm::deleteAll,
         )
     } else {
         BackHandler(onBack = vm::close)

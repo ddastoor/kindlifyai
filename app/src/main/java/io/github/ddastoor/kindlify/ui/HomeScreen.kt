@@ -15,7 +15,18 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -44,12 +55,23 @@ fun HomeScreen(
     snackbar: SnackbarHostState,
     onNew: () -> Unit,
     onOpen: (Project) -> Unit,
+    onDelete: (Project) -> Unit,
+    onDeleteAll: () -> Unit,
 ) {
+    var confirmDeleteAll by rememberSaveable { mutableStateOf(false) }
+    var deletingId by rememberSaveable { mutableStateOf<String?>(null) }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Kindlify") },
                 actions = {
+                    if (projects.isNotEmpty()) {
+                        TextButton(
+                            onClick = { confirmDeleteAll = true },
+                            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                        ) { Text("Delete all") }
+                    }
                     Text(
                         "v${BuildConfig.VERSION_NAME}",
                         style = MaterialTheme.typography.labelLarge,
@@ -105,25 +127,80 @@ fun HomeScreen(
                 item(key = "history-note") {
                     Text(
                         "Your ${AppViewModel.MAX_CANVASES} most recently edited canvases are kept. " +
-                            "Starting another one removes the oldest.",
+                            "Starting another one removes the oldest. Long-press a canvas to delete it.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 4.dp),
                     )
                 }
                 items(projects, key = { it.id }) { project ->
-                    ProjectCard(project, onClick = { onOpen(project) })
+                    ProjectCard(
+                        project = project,
+                        onClick = { onOpen(project) },
+                        onLongClick = { deletingId = project.id },
+                        modifier = Modifier.animateItem(),
+                    )
                 }
             }
         }
     }
+
+    projects.firstOrNull { it.id == deletingId }?.let { project ->
+        AlertDialog(
+            onDismissRequest = { deletingId = null },
+            title = { Text("Delete this canvas?") },
+            text = { Text("“${project.title.ifBlank { "Untitled" }}”, and any EPUB made from it, will be deleted.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        deletingId = null
+                        onDelete(project)
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { deletingId = null }) { Text("Keep") } },
+        )
+    }
+
+    if (confirmDeleteAll) {
+        AlertDialog(
+            onDismissRequest = { confirmDeleteAll = false },
+            title = { Text("Delete all canvases?") },
+            text = {
+                val count = if (projects.size == 1) "Your 1 canvas" else "All ${projects.size} canvases"
+                Text("$count, with their pictures and EPUBs, will be deleted. This can't be undone.")
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDeleteAll = false
+                        onDeleteAll()
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) { Text("Delete") }
+            },
+            dismissButton = { TextButton(onClick = { confirmDeleteAll = false }) { Text("Cancel") } },
+        )
+    }
 }
 
+/** Tap opens the canvas; long-press asks to delete it. */
 @Composable
-private fun ProjectCard(project: Project, onClick: () -> Unit) {
+private fun ProjectCard(project: Project, onClick: () -> Unit, onLongClick: () -> Unit, modifier: Modifier = Modifier) {
+    val haptics = LocalHapticFeedback.current
     Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(CardDefaults.shape)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    onLongClick()
+                },
+                onLongClickLabel = "Delete",
+            ),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
         Column(Modifier.padding(16.dp)) {

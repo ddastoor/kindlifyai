@@ -139,6 +139,29 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
         }
     }
 
+    /** Long-press on the home screen: deletes one canvas, with its pictures and EPUB. */
+    fun delete(project: Project) {
+        if (current?.id == project.id) return discard()
+        projects = projects.filterNot { it.id == project.id }
+        viewModelScope.launch {
+            withContext(disk) { store.delete(project.id) }
+            refreshList()
+        }
+        message("Deleted “${project.title.ifBlank { "Untitled" }}”.")
+    }
+
+    /** The Delete all button on the home screen: deletes every canvas. */
+    fun deleteAll() {
+        if (current != null) return // only offered on the home screen
+        projects = emptyList()
+        viewModelScope.launch {
+            // Queued behind any save still in flight, so nothing is written back afterwards.
+            withContext(disk) { store.deleteAll() }
+            refreshList()
+        }
+        message("All canvases deleted.")
+    }
+
     // ---- Editing ----
 
     fun setText(blockId: String, text: String) = edit(debounce = true) { p ->
