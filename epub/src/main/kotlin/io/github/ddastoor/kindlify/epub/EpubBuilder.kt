@@ -15,6 +15,9 @@ sealed interface EpubBlock {
 
     /** A JPEG, PNG or GIF file. */
     data class Image(val file: File) : EpubBlock
+
+    /** A horizontal dividing line. */
+    data object Separator : EpubBlock
 }
 
 /**
@@ -54,6 +57,7 @@ object EpubBuilder {
                     book.addResource(Resource(bytes, href))
                     body.append("<div class=\"image\"><img src=\"").append(href).append("\" alt=\"\"/></div>\n")
                 }
+                EpubBlock.Separator -> body.append("<hr/>\n")
             }
         }
 
@@ -137,5 +141,6 @@ $body</body>
 p { margin: 0 0 0.8em 0; text-indent: 0; }
 div.image { text-align: center; margin: 1em 0; page-break-inside: avoid; }
 img { max-width: 100%; }
+hr { margin: 1.5em 10%; border: 0; border-top: 1px solid #888; }
 """
 }

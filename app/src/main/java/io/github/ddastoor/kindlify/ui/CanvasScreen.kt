@@ -22,15 +22,32 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.ui.window.Dialog
+import androidx.compose.material3.AlertDialogDefaults
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -91,16 +108,16 @@ fun CanvasScreen(
     snackbar: SnackbarHostState,
     onBack: () -> Unit,
     onDiscard: () -> Unit,
-    onTitleChange: (String) -> Unit,
     onTextChange: (blockId: String, text: String) -> Unit,
     onMove: (blockId: String, delta: Int) -> Unit,
     onRemove: (blockId: String) -> Unit,
     onPaste: () -> Unit,
     onAddImage: () -> Unit,
-    onCreateEpub: () -> Unit,
+    onCreateEpub: (title: String) -> Unit,
     onExport: () -> Unit,
 ) {
     var confirmDiscard by rememberSaveable { mutableStateOf(false) }
+    var askTitle by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val keyboardOpen = WindowInsets.isImeVisible
 
@@ -116,7 +133,9 @@ fun CanvasScreen(
         modifier = Modifier.imePadding(),
         topBar = {
             TopAppBar(
-                title = { Text("Canvas") },
+                title = {
+                    Text(project.title.ifBlank { "Untitled" }, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back to all canvases")
@@ -148,7 +167,7 @@ fun CanvasScreen(
                     hasContent = project.blocks.isNotEmpty(),
                     epubReady = project.hasCurrentEpub,
                     busy = busy,
-                    onCreateEpub = onCreateEpub,
+                    onCreateEpub = { askTitle = true },
                     onExport = onExport,
                 )
             }
@@ -166,31 +185,44 @@ fun CanvasScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item(key = "title") {
-                OutlinedTextField(
-                    value = project.title,
-                    onValueChange = onTitleChange,
-                    label = { Text("Book title") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
             if (project.blocks.isEmpty()) {
                 item(key = "empty") { EmptyCanvasHint() }
             }
             itemsIndexed(project.blocks, key = { _, block -> block.id }) { index, block ->
-                BlockCard(
-                    block = block,
-                    imageFile = imageFile,
-                    isFirst = index == 0,
-                    isLast = index == project.blocks.lastIndex,
-                    onTextChange = onTextChange,
-                    onMove = onMove,
-                    onRemove = onRemove,
-                    modifier = Modifier.animateItem(),
-                )
+                val isFirst = index == 0
+                val isLast = index == project.blocks.lastIndex
+                if (block is Block.Separator) {
+                    SeparatorRow(
+                        onMoveUp = if (isFirst) null else ({ onMove(block.id, -1) }),
+                        onMoveDown = if (isLast) null else ({ onMove(block.id, 1) }),
+                        onRemove = { onRemove(block.id) },
+                        modifier = Modifier.animateItem(),
+                    )
+                } else {
+                    BlockCard(
+                        block = block,
+                        imageFile = imageFile,
+                        isFirst = isFirst,
+                        isLast = isLast,
+                        onTextChange = onTextChange,
+                        onMove = onMove,
+                        onRemove = onRemove,
+                        modifier = Modifier.animateItem(),
+                    )
+                }
             }
         }
+    }
+
+    if (askTitle) {
+        EpubTitleDialog(
+            initialTitle = project.title,
+            onDismiss = { askTitle = false },
+            onCreate = { title ->
+                askTitle = false
+                onCreateEpub(title)
+            },
+        )
     }
 
     if (confirmDiscard) {
@@ -325,6 +357,7 @@ private fun BlockCard(
                     height = block.height,
                     modifier = Modifier.padding(8.dp),
                 )
+                is Block.Separator -> Unit // drawn by SeparatorRow
             }
             BlockMenu(
                 onMoveUp = if (isFirst) null else ({ onMove(block.id, -1) }),
@@ -333,6 +366,91 @@ private fun BlockCard(
                 overImage = block is Block.Image,
                 modifier = Modifier.align(Alignment.TopEnd),
             )
+        }
+    }
+}
+
+/** A dividing line between items; becomes a horizontal rule in the EPUB. */
+@Composable
+private fun SeparatorRow(
+    onMoveUp: (() -> Unit)?,
+    onMoveDown: (() -> Unit)?,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier.fillMaxWidth().height(48.dp)) {
+        HorizontalDivider(
+            modifier = Modifier
+                .align(Alignment.Center)
+                .padding(start = 24.dp, end = 64.dp)
+                .semantics { contentDescription = "Separator line" },
+            thickness = 2.dp,
+            color = MaterialTheme.colorScheme.outlineVariant,
+        )
+        BlockMenu(
+            onMoveUp = onMoveUp,
+            onMoveDown = onMoveDown,
+            onRemove = onRemove,
+            overImage = false,
+            modifier = Modifier.align(Alignment.CenterEnd),
+        )
+    }
+}
+
+/** Asks for the book title before creating the EPUB, pre-filled with the canvas title. */
+@Composable
+private fun EpubTitleDialog(initialTitle: String, onDismiss: () -> Unit, onCreate: (String) -> Unit) {
+    // Cursor at the end; the ✕ button clears the default "Untitled <date>" in one tap.
+    var value by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(initialTitle, selection = TextRange(initialTitle.length)))
+    }
+    val canCreate = value.text.isNotBlank()
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+
+    // A plain full-width Dialog styled like an AlertDialog: Material's AlertDialog sizes
+    // itself around its content, which doesn't settle with a text field inside it.
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            shape = AlertDialogDefaults.shape,
+            color = AlertDialogDefaults.containerColor,
+            tonalElevation = AlertDialogDefaults.TonalElevation,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .widthIn(max = 560.dp),
+        ) {
+            Column(Modifier.padding(24.dp)) {
+                Text("Create EPUB", style = MaterialTheme.typography.headlineSmall)
+                Spacer(Modifier.height(16.dp))
+                OutlinedTextField(
+                    value = value,
+                    onValueChange = { value = it },
+                    label = { Text("Book title") },
+                    singleLine = true,
+                    trailingIcon = {
+                        if (value.text.isNotEmpty()) {
+                            IconButton(onClick = { value = TextFieldValue("") }) {
+                                Icon(Icons.Default.Clear, contentDescription = "Clear title")
+                            }
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        capitalization = KeyboardCapitalization.Sentences,
+                        imeAction = ImeAction.Done,
+                    ),
+                    keyboardActions = KeyboardActions(onDone = { if (canCreate) onCreate(value.text) }),
+                    modifier = Modifier.fillMaxWidth().focusRequester(focus),
+                )
+                Spacer(Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.align(Alignment.End),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    TextButton(onClick = onDismiss) { Text("Cancel") }
+                    TextButton(onClick = { onCreate(value.text) }, enabled = canCreate) { Text("Create") }
+                }
+            }
         }
     }
 }

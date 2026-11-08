@@ -5,10 +5,12 @@ A small, private Android app: collect text and images on a **canvas**, turn it i
 
 - **New canvas**, then **Paste** whatever is on the clipboard (text or images; repeat as often as you like).
   The gallery icon adds a photo instead.
-- **Share to Kindlify** from any app (selected text, a web page, one or more images): it opens a new canvas
-  with that content, titled from the shared subject when there is one.
-- Edit, reorder (⋮ menu) or remove pasted items, and set the book title.
-- **Create EPUB** builds the book (no cover). Any later edit makes it stale until you create it again.
+- **Share to Kindlify** from any app (selected text, a web page, one or more images):
+  - no canvas open: starts a new canvas with it, titled from the shared subject when there is one;
+  - a canvas open: appends it to that canvas, after a separator line (which becomes a horizontal rule in the book).
+- Edit, reorder (⋮ menu) or remove items, separators included.
+- **Create EPUB** asks for the book title (pre-filled with the canvas title, "Untitled <date>" by default),
+  then builds the book (no cover). Any later edit makes it stale until you create it again.
 - **Export** hands the EPUB straight to the Kindle app, which uploads it with Send to Kindle so it shows up
   in your Kindle library. If the Kindle app isn't installed, the normal share sheet opens instead.
 - **Cancel** abandons the canvas and deletes everything on it (after confirming).
@@ -18,7 +20,7 @@ Everything is saved as you go, in the app's private storage. Nothing is sent any
 
 ## Install
 
-Copy `Kindlify-1.0.apk` to the phone and open it. Android will ask you to allow installing apps from
+Copy the APK (e.g. `Kindlify-1.1.apk`) to the phone and open it. Android will ask you to allow installing apps from
 that source (your browser or Files app) once. Requires Android 10 or newer.
 
 ## How it's built
@@ -72,7 +74,7 @@ canvases) if the signature matches. Without `keystore.properties` the build fall
 - `app/`: end-to-end UI tests on the JVM with Robolectric (no emulator):
   - paste text and images, create the EPUB, export to the Kindle app, then Cancel;
   - export when no Kindle app is installed;
-  - sharing text and images into the app, from cold start and while running.
+  - sharing into the app: new canvas when none is open, appended after a separator when one is, and from a cold start.
 
   Screenshots are saved to `app/build/screenshots/`.
 

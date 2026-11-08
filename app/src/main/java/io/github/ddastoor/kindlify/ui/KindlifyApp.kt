@@ -51,7 +51,6 @@ fun KindlifyApp(vm: AppViewModel) {
             snackbar = snackbar,
             onBack = vm::close,
             onDiscard = vm::discard,
-            onTitleChange = vm::setTitle,
             onTextChange = vm::setText,
             onMove = vm::move,
             onRemove = vm::remove,

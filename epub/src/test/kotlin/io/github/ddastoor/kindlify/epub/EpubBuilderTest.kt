@@ -28,6 +28,7 @@ class EpubBuilderTest {
                 blocks = listOf(
                     EpubBlock.Text("First paragraph with an ampersand & a <tag>.\nSecond line of it.\n\n\nNew paragraph \u0001with a control char, émojis 📚 and ünïcödé."),
                     EpubBlock.Image(png),
+                    EpubBlock.Separator,
                     EpubBlock.Text("Text between the images."),
                     EpubBlock.Image(jpg),
                     EpubBlock.Text("   \n\n  "),
@@ -51,6 +52,8 @@ class EpubBuilderTest {
             assertTrue(names.any { it.endsWith("images/image001.png") }, names.toString())
             assertTrue(names.any { it.endsWith("images/image002.jpg") }, names.toString())
             assertTrue(names.none { it.contains("cover", ignoreCase = true) }, "no cover expected: $names")
+            val page = zip.getInputStream(zip.getEntry("OEBPS/content.xhtml")).reader().readText()
+            assertTrue(page.contains("<hr/>\n<p>Text between the images.</p>"), page)
         }
     }
 

@@ -22,4 +22,7 @@ sealed interface Block {
 
     /** An image stored (as JPEG or PNG) in the project's images folder. */
     data class Image(override val id: String, val fileName: String, val width: Int, val height: Int) : Block
+
+    /** A dividing line; added before content shared into a canvas that already has something in it. */
+    data class Separator(override val id: String) : Block
 }

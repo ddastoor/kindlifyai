@@ -53,14 +53,12 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
     private val messageChannel = Channel<String>(Channel.BUFFERED)
     val messages = messageChannel.receiveAsFlow()
 
-    init {
-        viewModelScope.launch {
-            // Reopen the canvas you were on if Android closed the app in the background.
-            val openId = savedState.get<String>(KEY_OPEN)
-            val (all, open) = withContext(disk) { store.list() to openId?.let { store.load(it) } }
-            projects = all
-            if (open != null && current == null) current = open
-        }
+    /** Loads the list and reopens the canvas you were on if Android closed the app in the background. */
+    private val restored: Job = viewModelScope.launch {
+        val openId = savedState.get<String>(KEY_OPEN)
+        val (all, open) = withContext(disk) { store.list() to openId?.let { store.load(it) } }
+        projects = all
+        if (open != null && current == null) current = open
     }
 
     // ---- Home ----
@@ -76,18 +74,27 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
     }
 
     /**
-     * Text or images shared to Kindlify from another app: always starts a new
-     * canvas (the one you were on is kept as a draft). Returns false if the
-     * intent wasn't a share.
+     * Text or images shared to Kindlify from another app.
+     * - No canvas open: starts a new canvas with them (titled from the share's subject, if any).
+     * - A canvas open: appends them to it, after a separator line if it already has content.
+     * Returns false if the intent wasn't a share.
      */
-    fun newCanvasFromShare(intent: Intent): Boolean {
+    fun receiveShare(intent: Intent): Boolean {
         val shared = runCatching { importer.readShare(intent) }.getOrNull() ?: return false
-        if (shared.items.isEmpty()) {
-            message("Nothing usable was shared. Kindlify takes text and images.")
-            return true
+        viewModelScope.launch {
+            // After a restart, wait until the canvas you had open is back before deciding.
+            restored.join()
+            if (shared.items.isEmpty()) {
+                message("Nothing usable was shared. Kindlify takes text and images.")
+                return@launch
+            }
+            val open = current
+            if (open == null) {
+                addAll(newCanvas(shared.subject), shared.items)
+            } else {
+                addAll(open, shared.items, separated = true, doneMessage = "Added to the end of this canvas.")
+            }
         }
-        val project = newCanvas(shared.subject)
-        addAll(project, shared.items)
         return true
     }
 
@@ -112,8 +119,6 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
     }
 
     // ---- Editing ----
-
-    fun setTitle(title: String) = edit(debounce = true) { it.copy(title = title) }
 
     fun setText(blockId: String, text: String) = edit(debounce = true) { p ->
         p.copy(blocks = p.blocks.map { if (it.id == blockId && it is Block.Text) it.copy(text = text) else it })
@@ -150,7 +155,16 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
         addAll(project, listOf(Pasted.ImageUri(uri)))
     }
 
-    private fun addAll(project: Project, items: List<Pasted>) {
+    /**
+     * Imports [items] and appends them to [project]. With [separated], a separator line
+     * goes first, unless the canvas is still empty.
+     */
+    private fun addAll(
+        project: Project,
+        items: List<Pasted>,
+        separated: Boolean = false,
+        doneMessage: String? = null,
+    ) {
         busy = true
         viewModelScope.launch {
             val results = withContext(Dispatchers.IO) {
@@ -159,7 +173,15 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
             busy = false
             val blocks = results.mapNotNull { it.getOrNull() }
             if (current?.id == project.id && blocks.isNotEmpty()) {
-                edit { it.copy(blocks = it.blocks + blocks) }
+                edit { p ->
+                    val separator = if (separated && p.blocks.isNotEmpty()) {
+                        listOf(Block.Separator(UUID.randomUUID().toString()))
+                    } else {
+                        emptyList()
+                    }
+                    p.copy(blocks = p.blocks + separator + blocks)
+                }
+                doneMessage?.let(::message)
             }
             results.forEach { r -> r.exceptionOrNull()?.let { Log.w(TAG, "Couldn't import item", it) } }
             val failed = results.count { it.isFailure }
@@ -171,8 +193,10 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
 
     fun epubFile(project: Project): File? = if (project.hasCurrentEpub) store.epubFile(project) else null
 
-    /** The Create EPUB button. */
-    fun createEpub() {
+    /** The Create EPUB button, once the book title has been confirmed in its dialog. */
+    fun createEpub(title: String) {
+        val name = title.trim()
+        if (name.isNotEmpty()) edit { it.copy(title = name) }
         val project = current ?: return
         if (project.blocks.isEmpty()) {
             message("Paste something in first.")
@@ -194,6 +218,7 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
                                 when (b) {
                                     is Block.Text -> EpubBlock.Text(b.text)
                                     is Block.Image -> EpubBlock.Image(store.imageFile(project.id, b))
+                                    is Block.Separator -> EpubBlock.Separator
                                 }
                             },
                             out = out,

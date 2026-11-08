@@ -7,6 +7,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.core.content.FileProvider
@@ -24,7 +25,10 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
-/** Sharing from another app (Android share sheet) starts a new canvas with the shared content. */
+/**
+ * Sharing from another app (Android share sheet): with no canvas open it starts a new
+ * canvas; with a canvas open it's appended to it, after a separator line.
+ */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w411dp-h891dp-xhdpi")
@@ -34,36 +38,51 @@ class ShareToAppTest {
     val compose = createAndroidComposeRule<MainActivity>()
 
     private val app: Application get() = ApplicationProvider.getApplicationContext()
+    private val store get() = ProjectStore(app.filesDir)
 
     @Before
     fun setUp() = resetFileProviderCache()
-    private val store get() = ProjectStore(app.filesDir)
 
     @Test
-    fun sharedText_opensNewCanvas_titledFromSubject_keepingTheOpenOne() {
-        // You are in the middle of another canvas when you share something.
-        compose.onNodeWithText("New canvas").performClick()
-        compose.onNodeWithText("Your canvas is empty").assertIsDisplayed()
+    fun sharedText_withNoCanvasOpen_startsNewCanvas_titledFromSubject() {
+        compose.onNodeWithText("No canvases yet").assertIsDisplayed()
 
-        share(
-            Intent(Intent.ACTION_SEND)
-                .setType("text/plain")
-                .putExtra(Intent.EXTRA_SUBJECT, "A great article")
-                .putExtra(Intent.EXTRA_TEXT, "A paragraph someone shared from their browser."),
-        )
+        share(textShare("A paragraph someone shared from their browser.", subject = "A great article"))
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("A paragraph someone shared", substring = true)).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("A great article").assertIsDisplayed()
-        compose.screenshot("07-shared-text")
+        compose.screenshot("07-shared-text-new-canvas")
 
-        compose.waitUntil(5_000) { store.list().size == 2 }
-        val projects = store.list()
-        val shared = projects.single { it.title == "A great article" }
-        assertEquals(1, shared.blocks.size)
-        assertTrue("earlier canvas kept as a draft", projects.any { it.title.startsWith("Untitled") })
+        val project = store.list().single()
+        assertEquals("A great article", project.title)
+        assertEquals(1, project.blocks.size)
     }
 
     @Test
-    fun sharedImages_opensNewCanvas() {
+    fun sharedText_withCanvasOpen_isAppendedAfterSeparator() {
+        compose.onNodeWithText("New canvas").performClick()
+        compose.onNodeWithText("Your canvas is empty").assertIsDisplayed()
+
+        // Open but empty canvas: no separator needed in front of the first item.
+        share(textShare("First shared paragraph."))
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("First shared paragraph.")).fetchSemanticsNodes().isNotEmpty() }
+
+        // Canvas now has content: the next share goes after a separator line.
+        share(textShare("Second shared paragraph.", subject = "Ignored when appending"))
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Second shared paragraph.")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription("Separator line").assertIsDisplayed()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Added to the end of this canvas.")).fetchSemanticsNodes().isNotEmpty() }
+        compose.screenshot("08-shared-text-appended")
+
+        val project = store.list().single()
+        assertTrue("title kept: ${project.title}", project.title.startsWith("Untitled"))
+        assertEquals(3, project.blocks.size)
+        assertEquals("First shared paragraph.", (project.blocks[0] as Block.Text).text)
+        assertTrue(project.blocks[1] is Block.Separator)
+        assertEquals("Second shared paragraph.", (project.blocks[2] as Block.Text).text)
+    }
+
+    @Test
+    fun sharedImages_withNoCanvasOpen_startsNewCanvas() {
         val first = File(app.filesDir, "projects/share-source/one.jpg").also { writeTestPhoto(it, 800, 600) }
         val second = File(app.filesDir, "projects/share-source/two.jpg").also { writeTestPhoto(it, 600, 900) }
         val uris = listOf(first, second).map { FileProvider.getUriForFile(app, "${app.packageName}.fileprovider", it) }
@@ -81,6 +100,11 @@ class ShareToAppTest {
         assertTrue(project.blocks.all { it is Block.Image })
         assertTrue(project.title.startsWith("Untitled"))
     }
+
+    private fun textShare(text: String, subject: String? = null) =
+        Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text).apply {
+            if (subject != null) putExtra(Intent.EXTRA_SUBJECT, subject)
+        }
 
     /** Delivers a share to the running app, as Android does for a singleTask activity. */
     private fun share(intent: Intent) {

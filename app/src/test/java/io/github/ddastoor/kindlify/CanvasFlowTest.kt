@@ -12,11 +12,13 @@ import android.net.Uri
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.core.content.FileProvider
 import androidx.core.content.IntentCompat
@@ -91,21 +93,29 @@ class CanvasFlowTest {
         assertEquals("downscaled to 2000px long side", 2000, image.width)
         assertEquals(1333, image.height)
 
-        // Create the EPUB.
+        // Create the EPUB: first asks for the title, pre-filled with "Untitled <date>".
         compose.onNodeWithText("Create EPUB").performClick()
+        compose.onNodeWithText("Book title").assertTextContains("Untitled", substring = true)
+        compose.screenshot("04a-epub-title-dialog")
+        compose.onNodeWithText("Book title").performTextReplacement("Weekend reading")
+        compose.onNodeWithText("Create").performClick()
         compose.waitUntil(15_000) { compose.onAllNodes(hasText("EPUB ready.", substring = true)).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Export").assertIsEnabled()
         compose.screenshot("04-epub-ready")
 
         val built = store.list().single()
+        assertEquals("Weekend reading", built.title)
         val epub = store.epubFile(built)
         assertNotNull(epub)
-        ZipFile(epub!!).use { zip ->
+        assertEquals("Weekend reading.epub", epub!!.name)
+        ZipFile(epub).use { zip ->
             val names = zip.entries().toList().map { it.name }
             assertEquals("mimetype", names.first())
             assertTrue(names.toString(), names.any { it.endsWith("images/image001.jpg") })
             val page = zip.getInputStream(zip.getEntry("OEBPS/content.xhtml")).reader().readText()
             assertTrue(page, page.contains("<p>Second paragraph, with an ampersand &amp; some &lt;angle brackets&gt;.</p>"))
+            val opf = zip.getInputStream(zip.getEntry("OEBPS/content.opf")).reader().readText()
+            assertTrue(opf, opf.contains("<dc:title>Weekend reading</dc:title>"))
         }
         // Keep a copy so it can be run through epubcheck after the test.
         epub.copyTo(File("build/e2e/canvas-flow.epub").apply { parentFile!!.mkdirs() }, overwrite = true)
@@ -124,7 +134,7 @@ class CanvasFlowTest {
         assertEquals(epub.length(), app.contentResolver.openInputStream(stream)!!.use { it.readBytes().size.toLong() })
 
         // Editing the canvas makes the EPUB stale, so Export is disabled until it is rebuilt.
-        compose.onNodeWithText("Book title").performTextReplacement("Weekend reading")
+        compose.onNodeWithText("A closing note after the picture.").performTextInput("PS: ")
         compose.onNodeWithText("Export").assertIsNotEnabled()
 
         // Back to the list: the canvas is kept as a draft.
@@ -149,6 +159,7 @@ class CanvasFlowTest {
         compose.onNodeWithText("Paste").performClick()
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("Just some text.")).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Create EPUB").performClick()
+        compose.onNodeWithText("Create").performClick()
         compose.waitUntil(15_000) { compose.onAllNodes(hasText("EPUB ready.", substring = true)).fetchSemanticsNodes().isNotEmpty() }
 
         compose.onNodeWithText("Export").performClick()

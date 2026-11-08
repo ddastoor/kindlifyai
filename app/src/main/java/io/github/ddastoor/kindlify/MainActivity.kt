@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
         if (intent == null || intent.getBooleanExtra(EXTRA_SHARE_HANDLED, false)) return
         // Reopening from Recents replays the original intent; that share was already handled.
         if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return
-        if (vm.newCanvasFromShare(intent)) intent.putExtra(EXTRA_SHARE_HANDLED, true)
+        if (vm.receiveShare(intent)) intent.putExtra(EXTRA_SHARE_HANDLED, true)
     }
 
     companion object {

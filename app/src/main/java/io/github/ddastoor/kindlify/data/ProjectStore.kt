@@ -70,6 +70,7 @@ class ProjectStore(filesDir: File) {
                             put("width", b.width)
                             put("height", b.height)
                         }
+                        is Block.Separator -> put("type", "separator")
                     }
                 })
             }
@@ -82,6 +83,7 @@ class ProjectStore(filesDir: File) {
             val b = arr.getJSONObject(i)
             when (b.getString("type")) {
                 "image" -> Block.Image(b.getString("id"), b.getString("file"), b.getInt("width"), b.getInt("height"))
+                "separator" -> Block.Separator(b.getString("id"))
                 else -> Block.Text(b.getString("id"), b.getString("text"))
             }
         }
