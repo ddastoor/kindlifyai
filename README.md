@@ -20,8 +20,18 @@ Everything is saved as you go, in the app's private storage. Nothing is sent any
 
 ## Install
 
-Copy the APK (e.g. `Kindlify-1.1.apk`) to the phone and open it. Android will ask you to allow installing apps from
-that source (your browser or Files app) once. Requires Android 10 or newer.
+The latest build is in the repo: [`apk/Kindlify.apk`](apk/Kindlify.apk) (version 1.1).
+On the phone, download it from
+<https://github.com/ddastoor/kindlifyai/raw/main/apk/Kindlify.apk>, open it, and allow installing apps
+from that source (your browser or Files app) when Android asks. Requires Android 10 or newer.
+
+Over USB, with USB debugging on:
+
+```bash
+adb install -r apk/Kindlify.apk
+```
+
+Updates install over the existing app and keep your canvases, because every build is signed with the same key.
 
 ## How it's built
 
