@@ -43,6 +43,7 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -199,6 +200,7 @@ fun CanvasScreen(
                 val isLast = index == project.blocks.lastIndex
                 if (block is Block.Separator) {
                     SeparatorRow(
+                        title = block.title,
                         onMoveUp = if (isFirst) null else ({ onMove(block.id, -1) }),
                         onMoveDown = if (isLast) null else ({ onMove(block.id, 1) }),
                         onRemove = { onRemove(block.id) },
@@ -367,6 +369,14 @@ private fun BlockCard(
                     onValueChange = { onTextChange(block.id, it) },
                     textStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface),
                     cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    // Fetched text shows its formatting; the text itself (and editing) stays plain.
+                    visualTransformation = if (block.formatted) {
+                        val dim = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+                        val quote = MaterialTheme.colorScheme.onSurfaceVariant
+                        remember(dim, quote) { MarkupHighlighter(dim, quote) }
+                    } else {
+                        VisualTransformation.None
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(start = 16.dp, top = 14.dp, bottom = 14.dp, end = 48.dp),
@@ -390,15 +400,16 @@ private fun BlockCard(
     }
 }
 
-/** A dividing line between items; becomes a horizontal rule in the EPUB. */
+/** A dividing line between items; starts a new chapter in the EPUB, labelled with its title. */
 @Composable
 private fun SeparatorRow(
+    title: String?,
     onMoveUp: (() -> Unit)?,
     onMoveDown: (() -> Unit)?,
     onRemove: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier.fillMaxWidth().height(48.dp)) {
+    Box(modifier.fillMaxWidth().height(56.dp)) {
         HorizontalDivider(
             modifier = Modifier
                 .align(Alignment.Center)
@@ -407,6 +418,19 @@ private fun SeparatorRow(
             thickness = 2.dp,
             color = MaterialTheme.colorScheme.outlineVariant,
         )
+        Surface(
+            color = MaterialTheme.colorScheme.background,
+            modifier = Modifier.align(Alignment.Center).padding(start = 24.dp, end = 64.dp),
+        ) {
+            Text(
+                if (title.isNullOrBlank()) "New chapter" else "Chapter: $title",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+        }
         BlockMenu(
             onMoveUp = onMoveUp,
             onMoveDown = onMoveDown,

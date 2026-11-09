@@ -91,7 +91,11 @@ class FetchContentsTest {
         assertTrue("separator below the link", project.blocks[1] is Block.Separator)
         val pictures = project.blocks.filterIsInstance<Block.Image>().map { it.width to it.height }
         assertEquals("article pictures only, no logo/ad", listOf(1200 to 800, 900 to 600), pictures)
-        val text = project.blocks.drop(2).filterIsInstance<Block.Text>().joinToString("\n\n") { it.text }
+        assertEquals("the separator names the article's chapter", "A Walk Through the Old Harbour", (project.blocks[1] as Block.Separator).title)
+        val fetched = project.blocks.drop(2).filterIsInstance<Block.Text>()
+        assertTrue("fetched text keeps its formatting", fetched.all { it.formatted })
+        assertTrue(fetched.first().text, fetched.first().text.startsWith("*From The Daily Example · by Jane Writer · "))
+        val text = fetched.joinToString("\n\n") { it.text }
         assertTrue(text, text.contains("The old harbour wakes up slowly."))
         assertTrue(text, text.contains("• The lighthouse at the end of the north pier."))
         for (junk in listOf("Buy cheap watches", "Subscribe now", "Cookie settings", "Comments (42)", "All rights reserved")) {
@@ -108,9 +112,23 @@ class FetchContentsTest {
         compose.waitUntil(15_000) { compose.onAllNodes(hasText("EPUB ready.", substring = true)).fetchSemanticsNodes().isNotEmpty() }
         val epub = store.epubFile(store.list().single())!!
         ZipFile(epub).use { zip ->
-            val page = zip.getInputStream(zip.getEntry("OEBPS/content.xhtml")).reader().readText()
-            assertTrue(page.contains("<hr/>"))
-            assertEquals(2, Regex("<img ").findAll(page).count())
+            fun read(name: String) = zip.getInputStream(zip.getEntry(name)).reader().readText()
+            // The link stays on the first page; the article is its own chapter, listed in the table of contents.
+            assertTrue(read("OEBPS/content.xhtml").contains(link))
+            val chapter = read("OEBPS/chapter-002.xhtml")
+            assertTrue(chapter, chapter.contains("<h1>A Walk Through the Old Harbour</h1>"))
+            assertEquals(2, Regex("<img ").findAll(chapter).count())
+            assertTrue(read("OEBPS/toc.ncx").contains("<text>A Walk Through the Old Harbour</text>"))
+            // Formatting and the source line come through as real formatting.
+            for (expected in listOf(
+                "<p><em>From The Daily Example · by Jane Writer · ",
+                "The museum's <strong>best exhibit</strong> is a <em>hand-drawn</em> map",
+                "<h2>What to see</h2>",
+                "<blockquote>",
+                "<li><strong>Tip:</strong> go early, before the crowds.</li>",
+                "<ol>\n<li>Take the coastal train to Harbour Halt.</li>",
+                "open daily* (*except Mondays).",
+            )) assertTrue("chapter should contain: $expected\n$chapter", chapter.contains(expected))
         }
         epub.copyTo(File("build/e2e/fetched-article.epub").apply { parentFile!!.mkdirs() }, overwrite = true)
     }

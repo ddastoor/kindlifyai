@@ -37,11 +37,21 @@ private val BARE_DOMAIN_LINK = Regex("(?i)([a-z0-9-]+\\.)+[a-z]{2,}(:\\d+)?([/?#
 sealed interface Block {
     val id: String
 
-    data class Text(override val id: String, val text: String) : Block
+    /**
+     * Text. Pasted and shared text is plain ([formatted] = false) and goes into the book exactly as
+     * typed. Text fetched from web pages is [formatted]: it uses a small markup that becomes real
+     * formatting in the book: lines starting "## " / "### " are headings, "> " quotes, "• " and
+     * "1. " list items, and **bold** / *italic* inline (a backslash keeps a literal \* or \\).
+     */
+    data class Text(override val id: String, val text: String, val formatted: Boolean = false) : Block
 
     /** An image stored (as JPEG or PNG) in the project's images folder. */
     data class Image(override val id: String, val fileName: String, val width: Int, val height: Int) : Block
 
-    /** A dividing line; added before content shared into a canvas that already has something in it. */
-    data class Separator(override val id: String) : Block
+    /**
+     * A dividing line, which starts a new chapter in the book. [title] names that chapter in the
+     * Kindle's table of contents (a fetched article's title, or a shared page's subject); without
+     * one, the chapter is named after its first line.
+     */
+    data class Separator(override val id: String, val title: String? = null) : Block
 }

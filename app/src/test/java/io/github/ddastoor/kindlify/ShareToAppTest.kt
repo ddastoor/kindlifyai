@@ -66,8 +66,9 @@ class ShareToAppTest {
         share(textShare("First shared paragraph."))
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("First shared paragraph.")).fetchSemanticsNodes().isNotEmpty() }
 
-        // Canvas now has content: the next share goes after a separator line.
-        share(textShare("Second shared paragraph.", subject = "Ignored when appending"))
+        // Canvas now has content: the next share goes after a separator line, which starts a
+        // new chapter named after the share's subject (the canvas keeps its own title).
+        share(textShare("Second shared paragraph.", subject = "The second article"))
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("Second shared paragraph.")).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithContentDescription("Separator line").assertIsDisplayed()
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("Added to the end of this canvas.")).fetchSemanticsNodes().isNotEmpty() }
@@ -77,7 +78,7 @@ class ShareToAppTest {
         assertTrue("title kept: ${project.title}", project.title.startsWith("Untitled"))
         assertEquals(3, project.blocks.size)
         assertEquals("First shared paragraph.", (project.blocks[0] as Block.Text).text)
-        assertTrue(project.blocks[1] is Block.Separator)
+        assertEquals("The second article", (project.blocks[1] as Block.Separator).title)
         assertEquals("Second shared paragraph.", (project.blocks[2] as Block.Text).text)
     }
 

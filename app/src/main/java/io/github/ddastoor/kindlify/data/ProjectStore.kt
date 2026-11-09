@@ -68,6 +68,7 @@ class ProjectStore(filesDir: File) {
                         is Block.Text -> {
                             put("type", "text")
                             put("text", b.text)
+                            if (b.formatted) put("formatted", true)
                         }
                         is Block.Image -> {
                             put("type", "image")
@@ -75,7 +76,10 @@ class ProjectStore(filesDir: File) {
                             put("width", b.width)
                             put("height", b.height)
                         }
-                        is Block.Separator -> put("type", "separator")
+                        is Block.Separator -> {
+                            put("type", "separator")
+                            b.title?.let { put("title", it) }
+                        }
                     }
                 })
             }
@@ -88,8 +92,9 @@ class ProjectStore(filesDir: File) {
             val b = arr.getJSONObject(i)
             when (b.getString("type")) {
                 "image" -> Block.Image(b.getString("id"), b.getString("file"), b.getInt("width"), b.getInt("height"))
-                "separator" -> Block.Separator(b.getString("id"))
-                else -> Block.Text(b.getString("id"), b.getString("text"))
+                // Fields added in 1.5 are optional, so canvases saved by older versions load as before.
+                "separator" -> Block.Separator(b.getString("id"), if (b.has("title")) b.getString("title") else null)
+                else -> Block.Text(b.getString("id"), b.getString("text"), b.optBoolean("formatted", false))
             }
         }
         return Project(

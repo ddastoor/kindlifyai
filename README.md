@@ -7,13 +7,24 @@ A small, private Android app: collect text and images on a **canvas**, turn it i
   The gallery icon adds a photo instead.
 - **Share to Kindlify** from any app (selected text, a web page, one or more images):
   - no canvas open: starts a new canvas with it, titled from the shared subject when there is one;
-  - a canvas open: appends it to that canvas, after a separator line (which becomes a horizontal rule in the book).
+  - a canvas open: appends it to that canvas, after a separator line that starts a new chapter
+    (named after the shared subject, if any).
+- **Launcher shortcuts**: long-press the Kindlify icon for **Paste into latest canvas** (the open one,
+  else the most recently edited, else a new one) or **New canvas from clipboard**.
 - **Fetch contents**: when a canvas holds nothing but a link, this button pulls in the page in
   "reader mode": the article's text and pictures, without ads, menus, side panels, comments or footers.
-  It's added below the link (which is kept) after a separator, and a canvas still called "Untitled …"
-  takes the article's title. The button is greyed out whenever there's anything besides the link.
-  Pages that build their text with JavaScript, or sit behind a paywall or login, can't be fetched.
+  It's added below the link (which is kept) after a separator that starts the article's own chapter,
+  headed by a "From site · by author · date" line, with headings, **bold**, *italic*, quotes and lists
+  kept. A canvas still called "Untitled …" takes the article's title. The button is greyed out whenever
+  there's anything besides the link. Pages that build their text with JavaScript (or refuse plain
+  downloads) are loaded once more in a hidden browser so their scripts can run; paywalled or login-only
+  pages still can't be fetched.
+- **Chapters**: every separator starts a new chapter in the EPUB, listed in the Kindle's table of
+  contents ("Go to"). A chapter is named after its fetched article or shared subject, else its first line.
 - Edit, reorder (⋮ menu) or remove items, separators included.
+- **Formatting**: fetched text uses a small markup, shown styled on the canvas and still editable as
+  plain text: `## ` heading, `### ` subheading, `> ` quote, `• ` / `1. ` list items, `**bold**`, `*italic*`
+  (`\*` for a literal star). Pasted and shared text is always plain, exactly as typed.
 - **Create EPUB** asks for the book title (pre-filled with the canvas title, "Untitled <date>" by default),
   then builds the book (no cover). Any later edit makes it stale until you create it again.
 - **Export** hands the EPUB straight to the Kindle app, which uploads it with Send to Kindle so it shows up
@@ -29,7 +40,7 @@ Everything is saved as you go, in the app's private storage. The app only goes o
 
 ## Install
 
-The latest build is in the repo: [`apk/Kindlify.apk`](apk/Kindlify.apk) (version 1.4).
+The latest build is in the repo: [`apk/Kindlify.apk`](apk/Kindlify.apk) (version 1.5).
 On the phone, download it from
 <https://github.com/ddastoor/kindlifyai/raw/main/apk/Kindlify.apk>, open it, and allow installing apps
 from that source (your browser or Files app) when Android asks. Requires Android 10 or newer.
@@ -59,6 +70,11 @@ Notes:
 - **kxml2 relocation**: epub4j builds kxml2's `KXmlSerializer` directly. Android has a hidden copy of that
   class that apps aren't allowed to use, so `epub/` bundles kxml2 under its own package name
   (the Shadow plugin's `shadowJar`). The app uses that jar.
+- **Chapters**: without separators the book is a single page (`content.xhtml`); each separator starts
+  `chapter-NNN.xhtml` and an NCX table-of-contents entry.
+- **Hidden browser**: `WebViewRenderer` loads the page in an off-screen WebView (JavaScript on,
+  images off, no JavaScript bridge, no file access) and reader mode runs on the result. It's only used
+  when the direct download finds under 300 characters of article text, or the site answers 403/429/503.
 - **Fetched pictures** smaller than 100 px (icons, trackers) are skipped, and at most 40 are kept per page.
   Lazy-loaded pictures (`data-src`, `srcset`) are found too.
 - The output is checked with the W3C **epubcheck** validator in the tests: 0 errors, 0 warnings.
@@ -100,7 +116,11 @@ canvases) if the signature matches. Without `keystore.properties` the build fall
   - Fetch contents against a local test web server (button only enabled for a lone link, ads and menus
     dropped, pictures kept in order, EPUB created from it), and a page that can't be fetched;
   - keeping 20 canvases: starting the 21st removes the least recently edited;
-  - long-press to delete one canvas, and Delete all.
+  - long-press to delete one canvas, and Delete all;
+  - launcher shortcuts (including waiting for window focus before reading the clipboard);
+  - when Fetch contents falls back to the browser (with a stand-in browser: Robolectric can't run a
+    real WebView), and that canvases saved by older versions still load.
+- EPUB chapters, formatting and plain text staying plain, all checked with epubcheck.
 - Reader mode on a sample news page, and link detection, as plain unit tests.
 
   Screenshots are saved to `app/build/screenshots/`.

@@ -57,6 +57,29 @@ class ArticleExtractorTest {
     }
 
     @Test
+    fun keepsFormatting_asMarkup() {
+        val text = extract().parts.filterIsInstance<Part.Text>().joinToString("\n\n") { it.text }
+        assertTrue(text, text.contains("The museum's **best exhibit** is a *hand-drawn* map"))
+        assertTrue(text, text.contains("## What to see"))
+        assertTrue(text, text.contains("> \"Thirty years, and I have never once been late,\" says the coffee seller."))
+        assertTrue(text, text.contains("• **Tip:** go early, before the crowds."))
+        assertTrue(text, text.contains("1. Take the coastal train to Harbour Halt.\n\n2. Walk down the hill to the quay."))
+        // A real asterisk in the article is escaped, so it isn't taken for formatting.
+        assertTrue(text, text.contains("The museum is open daily\\* (\\*except Mondays)."))
+    }
+
+    @Test
+    fun readsWhoPublishedItAndWhen() {
+        val source = extract().source!!
+        assertTrue(source, source.startsWith("*From The Daily Example · by Jane Writer · "))
+        assertTrue(source, source.endsWith("2026*"))
+        assertTrue(source, source.contains("8"))
+        // Without a site name in the page, the web address's host name is used.
+        val bare = ArticleExtractor.extract(Jsoup.parse(page.replace("og:site_name", "x-none"), "https://www.example.org/a.html"))
+        assertTrue(bare.source!!, bare.source!!.startsWith("*From example.org · by Jane Writer"))
+    }
+
+    @Test
     fun keepsParagraphsAndListItems() {
         val text = extract().parts.filterIsInstance<Part.Text>().joinToString("\n\n") { it.text }
         assertTrue(text, text.contains("• The fish market, early in the morning.\n\n• The 1820 harbour map in the museum."))

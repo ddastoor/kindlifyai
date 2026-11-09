@@ -17,6 +17,7 @@ import io.github.ddastoor.kindlify.data.Pasted
 import io.github.ddastoor.kindlify.data.Project
 import io.github.ddastoor.kindlify.data.ProjectStore
 import io.github.ddastoor.kindlify.data.WebImporter
+import io.github.ddastoor.kindlify.data.WebViewRenderer
 import io.github.ddastoor.kindlify.data.soleLink
 import io.github.ddastoor.kindlify.epub.EpubBlock
 import io.github.ddastoor.kindlify.epub.EpubBuilder
@@ -36,7 +37,7 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
 
     val store = ProjectStore(app.filesDir)
     private val importer = ContentImporter(app, store)
-    private val web = WebImporter(importer)
+    private val web = WebImporter(importer, WebViewRenderer(app))
 
     /** All disk writes go through this one-at-a-time dispatcher, so saves never overlap. */
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -113,7 +114,13 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
             if (open == null) {
                 addAll(newCanvas(shared.subject), shared.items)
             } else {
-                addAll(open, shared.items, separated = true, doneMessage = "Added to the end of this canvas.")
+                addAll(
+                    open,
+                    shared.items,
+                    separated = true,
+                    chapterTitle = shared.subject,
+                    doneMessage = "Added to the end of this canvas.",
+                )
             }
         }
         return true
@@ -193,6 +200,30 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
         addAll(project, items)
     }
 
+    /**
+     * The launcher shortcuts: "Paste into latest canvas" (the open one, else the most recently
+     * edited, else a new one) and "New canvas from clipboard". Adds the clipboard the same way
+     * as the Paste button. Call only once the window has focus: Android lets an app read the
+     * clipboard only then.
+     */
+    fun pasteFromShortcut(intoNewCanvas: Boolean) {
+        val items = runCatching { importer.readClipboard() }.getOrDefault(emptyList()) // read now, while focused
+        viewModelScope.launch {
+            restored.join()
+            if (items.isEmpty()) {
+                message("The clipboard is empty. Copy some text or an image first.")
+                return@launch
+            }
+            val target = when {
+                intoNewCanvas -> newCanvas()
+                else -> current
+                    ?: withContext(disk) { store.list().firstOrNull() }?.also { show(it) }
+                    ?: newCanvas()
+            }
+            addAll(target, items)
+        }
+    }
+
     /** Adds an image chosen from the photo picker. */
     fun addImage(uri: Uri) {
         val project = current ?: return
@@ -201,12 +232,13 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
 
     /**
      * Imports [items] and appends them to [project]. With [separated], a separator line
-     * goes first, unless the canvas is still empty.
+     * (a new chapter, named [chapterTitle] if given) goes first, unless the canvas is still empty.
      */
     private fun addAll(
         project: Project,
         items: List<Pasted>,
         separated: Boolean = false,
+        chapterTitle: String? = null,
         doneMessage: String? = null,
     ) {
         busy = true
@@ -219,7 +251,7 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
             if (current?.id == project.id && blocks.isNotEmpty()) {
                 edit { p ->
                     val separator = if (separated && p.blocks.isNotEmpty()) {
-                        listOf(Block.Separator(UUID.randomUUID().toString()))
+                        listOf(Block.Separator(UUID.randomUUID().toString(), chapterTitle))
                     } else {
                         emptyList()
                     }
@@ -262,7 +294,9 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
             edit { p ->
                 // A canvas still on its automatic "Untitled <date>" name takes the article's title.
                 val title = if (p.title.startsWith(DEFAULT_TITLE_PREFIX) && !page.title.isNullOrBlank()) page.title else p.title
-                p.copy(title = title, blocks = p.blocks + Block.Separator(UUID.randomUUID().toString()) + page.blocks)
+                // The separator starts the article's chapter, named after it in the table of contents.
+                val separator = Block.Separator(UUID.randomUUID().toString(), page.title?.takeIf { it.isNotBlank() })
+                p.copy(title = title, blocks = p.blocks + separator + page.blocks)
             }
             message("Page contents added below the link.")
         }
@@ -295,9 +329,9 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
                             title = project.title,
                             blocks = project.blocks.map { b ->
                                 when (b) {
-                                    is Block.Text -> EpubBlock.Text(b.text)
+                                    is Block.Text -> EpubBlock.Text(b.text, b.formatted)
                                     is Block.Image -> EpubBlock.Image(store.imageFile(project.id, b))
-                                    is Block.Separator -> EpubBlock.Separator
+                                    is Block.Separator -> EpubBlock.ChapterBreak(b.title)
                                 }
                             },
                             out = out,
