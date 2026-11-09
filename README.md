@@ -7,10 +7,10 @@ A small, private Android app: collect text and images on a **canvas**, turn it i
   The gallery icon adds a photo instead.
 - **Share to Kindlify** from any app (selected text, a web page, one or more images):
   - no canvases yet: starts a new canvas with it, titled from the shared subject when there is one;
-  - one canvas: opens it and appends the shared content after a separator line that starts a new
-    chapter (named after the shared subject, if any);
-  - several canvases: asks **Add to which canvas?** with a list of them (the open one is marked);
-    tap one to append there the same way, or **Cancel** to add nothing.
+  - one or more canvases: asks **Add to which canvas?** with **New canvas** at the top and then all
+    your canvases (the open one is marked). Tap a canvas to append the shared content after a
+    separator line that starts a new chapter (named after the shared subject, if any); tap
+    **New canvas** to start one with it; or **Cancel** to add nothing.
 - **Launcher shortcuts**: long-press the Kindlify icon for **Paste into latest canvas** (the open one,
   else the most recently edited, else a new one) or **New canvas from clipboard**.
 - **Fetch contents**: when a canvas holds nothing but a link, this button pulls in the page in
@@ -42,7 +42,7 @@ Everything is saved as you go, in the app's private storage. The app only goes o
 
 ## Install
 
-The latest build is in the repo: [`apk/Kindlify.apk`](apk/Kindlify.apk) (version 1.6).
+The latest build is in the repo: [`apk/Kindlify.apk`](apk/Kindlify.apk) (version 1.7).
 On the phone, download it from
 <https://github.com/ddastoor/kindlifyai/raw/main/apk/Kindlify.apk>, open it, and allow installing apps
 from that source (your browser or Files app) when Android asks. Requires Android 10 or newer.
@@ -114,8 +114,9 @@ canvases) if the signature matches. Without `keystore.properties` the build fall
 - `app/`: end-to-end UI tests on the JVM with Robolectric (no emulator):
   - paste text and images, create the EPUB, export to the Kindle app, then Cancel;
   - export when no Kindle app is installed;
-  - sharing into the app: new canvas when there are none, appended to the only one, picking from the
-    list when there are several (or cancelling), keeping edits to the open canvas, and from a cold start;
+  - sharing into the app: new canvas when there are none; otherwise picking a canvas from the list,
+    picking "New canvas" (including at the 20-canvas limit), cancelling, keeping edits to the open
+    canvas, and from a cold start;
   - Fetch contents against a local test web server (button only enabled for a lone link, ads and menus
     dropped, pictures kept in order, EPUB created from it), and a page that can't be fetched;
   - keeping 20 canvases: starting the 21st removes the least recently edited;

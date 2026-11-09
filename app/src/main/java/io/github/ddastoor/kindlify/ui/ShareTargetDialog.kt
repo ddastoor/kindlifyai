@@ -9,7 +9,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialogDefaults
@@ -26,19 +30,22 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import io.github.ddastoor.kindlify.AppViewModel
 import io.github.ddastoor.kindlify.PendingShare
 import io.github.ddastoor.kindlify.data.Pasted
 import io.github.ddastoor.kindlify.data.Project
 
 /**
- * Something was shared to Kindlify and there are several canvases: pick the one it goes
- * into (it's added at the end, after a separator), or Cancel to drop the share.
+ * Something was shared to Kindlify and there are canvases already: pick the one it goes
+ * into (it's added at the end, after a separator), start a new canvas with it, or Cancel
+ * to drop the share.
  */
 @Composable
 fun ShareTargetDialog(
     pending: PendingShare,
     openId: String?,
     onPick: (Project) -> Unit,
+    onNewCanvas: () -> Unit,
     onCancel: () -> Unit,
 ) {
     // Plain full-width Dialog (like the EPUB title box) rather than AlertDialog, which sizes
@@ -61,7 +68,7 @@ fun ShareTargetDialog(
                 )
                 Spacer(Modifier.height(8.dp))
                 Text(
-                    "${describe(pending)} will be added at the end, after a separator.",
+                    "${describe(pending)} goes at the end of the canvas you pick, after a separator, or into a new canvas.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 24.dp),
@@ -69,6 +76,7 @@ fun ShareTargetDialog(
                 Spacer(Modifier.height(12.dp))
                 HorizontalDivider()
                 Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                    NewCanvasRow(pending, onNewCanvas)
                     pending.choices.forEach { project ->
                         Column(
                             Modifier
@@ -100,6 +108,35 @@ fun ShareTargetDialog(
                     TextButton(onClick = onCancel) { Text("Cancel") }
                 }
             }
+        }
+    }
+}
+
+/** The first entry in the list: start a new canvas with the shared content. */
+@Composable
+private fun NewCanvasRow(pending: PendingShare, onNewCanvas: () -> Unit) {
+    // At the limit, starting a canvas removes the least recently edited one: say which.
+    val removed = pending.choices.takeIf { it.size >= AppViewModel.MAX_CANVASES }?.minByOrNull { it.updatedAt }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(role = Role.Button, onClickLabel = "Start a new canvas") { onNewCanvas() }
+            .padding(horizontal = 24.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+        Spacer(Modifier.width(16.dp))
+        Column {
+            Text("New canvas", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+            Text(
+                if (removed == null) {
+                    "Start a fresh canvas with it"
+                } else {
+                    "Removes your oldest canvas, “${removed.title.ifBlank { "Untitled" }}” (${AppViewModel.MAX_CANVASES} are kept)"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

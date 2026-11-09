@@ -103,8 +103,8 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
     /**
      * Text or images shared to Kindlify from another app:
      * - no canvases yet: starts a new canvas with them (titled from the share's subject, if any);
-     * - one canvas: opens it and appends them, after a separator line if it already has content;
-     * - several canvases: asks which one ([pendingShare]); see [shareInto] and [cancelShare].
+     * - one or more canvases: asks which one ([pendingShare]), with a "New canvas" option too;
+     *   see [shareInto], [shareIntoNewCanvas] and [cancelShare].
      * Returns false if the intent wasn't a share.
      */
     fun receiveShare(intent: Intent): Boolean {
@@ -121,10 +121,10 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
             // The open canvas may have edits not saved yet: offer that copy rather than the one on disk.
             val canvases = saved.map { if (open != null && it.id == open.id) open else it } +
                 listOfNotNull(open?.takeIf { o -> saved.none { it.id == o.id } })
-            when (canvases.size) {
-                0 -> addAll(newCanvas(shared.subject), shared.items)
-                1 -> appendShare(canvases.single(), shared)
-                else -> pendingShare = PendingShare(shared, canvases)
+            if (canvases.isEmpty()) {
+                addAll(newCanvas(shared.subject), shared.items)
+            } else {
+                pendingShare = PendingShare(shared, canvases)
             }
         }
         return true
@@ -135,6 +135,13 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
         val pending = pendingShare ?: return
         pendingShare = null
         appendShare(project, pending.content)
+    }
+
+    /** "New canvas" in the list: the share starts a new canvas (named after its subject, if any). */
+    fun shareIntoNewCanvas() {
+        val pending = pendingShare ?: return
+        pendingShare = null
+        addAll(newCanvas(pending.content.subject), pending.content.items)
     }
 
     /** Cancel in the canvas list: the share is dropped and nothing changes. */
