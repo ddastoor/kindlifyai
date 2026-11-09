@@ -16,6 +16,7 @@ import io.github.ddastoor.kindlify.data.ContentImporter
 import io.github.ddastoor.kindlify.data.Pasted
 import io.github.ddastoor.kindlify.data.Project
 import io.github.ddastoor.kindlify.data.ProjectStore
+import io.github.ddastoor.kindlify.data.SharedContent
 import io.github.ddastoor.kindlify.data.WebImporter
 import io.github.ddastoor.kindlify.data.WebViewRenderer
 import io.github.ddastoor.kindlify.data.soleLink
@@ -95,10 +96,15 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
             .forEach { store.delete(it.id) }
     }
 
+    /** A share waiting for you to pick which canvas it goes into (when there are several). */
+    var pendingShare by mutableStateOf<PendingShare?>(null)
+        private set
+
     /**
-     * Text or images shared to Kindlify from another app.
-     * - No canvas open: starts a new canvas with them (titled from the share's subject, if any).
-     * - A canvas open: appends them to it, after a separator line if it already has content.
+     * Text or images shared to Kindlify from another app:
+     * - no canvases yet: starts a new canvas with them (titled from the share's subject, if any);
+     * - one canvas: opens it and appends them, after a separator line if it already has content;
+     * - several canvases: asks which one ([pendingShare]); see [shareInto] and [cancelShare].
      * Returns false if the intent wasn't a share.
      */
     fun receiveShare(intent: Intent): Boolean {
@@ -111,19 +117,46 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
                 return@launch
             }
             val open = current
-            if (open == null) {
-                addAll(newCanvas(shared.subject), shared.items)
-            } else {
-                addAll(
-                    open,
-                    shared.items,
-                    separated = true,
-                    chapterTitle = shared.subject,
-                    doneMessage = "Added to the end of this canvas.",
-                )
+            val saved = withContext(disk) { store.list() }
+            // The open canvas may have edits not saved yet: offer that copy rather than the one on disk.
+            val canvases = saved.map { if (open != null && it.id == open.id) open else it } +
+                listOfNotNull(open?.takeIf { o -> saved.none { it.id == o.id } })
+            when (canvases.size) {
+                0 -> addAll(newCanvas(shared.subject), shared.items)
+                1 -> appendShare(canvases.single(), shared)
+                else -> pendingShare = PendingShare(shared, canvases)
             }
         }
         return true
+    }
+
+    /** The canvas picked from the list for a pending share. */
+    fun shareInto(project: Project) {
+        val pending = pendingShare ?: return
+        pendingShare = null
+        appendShare(project, pending.content)
+    }
+
+    /** Cancel in the canvas list: the share is dropped and nothing changes. */
+    fun cancelShare() {
+        if (pendingShare == null) return
+        pendingShare = null
+        message("Share cancelled. Nothing was added.")
+    }
+
+    /** Opens [target] (if it isn't already) and adds the share at the end, after a separator. */
+    private fun appendShare(target: Project, shared: SharedContent) {
+        val project = current?.takeIf { it.id == target.id } ?: target.also {
+            flush() // keep any edits to the canvas being left
+            show(it)
+        }
+        addAll(
+            project,
+            shared.items,
+            separated = true,
+            chapterTitle = shared.subject,
+            doneMessage = "Added to the end of this canvas.",
+        )
     }
 
     fun open(project: Project) = show(project)
@@ -426,3 +459,6 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
         }
     }
 }
+
+/** A share waiting for a canvas to be picked: what was shared, and the canvases to choose from (newest first). */
+data class PendingShare(val content: SharedContent, val choices: List<Project>)

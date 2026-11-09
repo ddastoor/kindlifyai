@@ -212,7 +212,7 @@ private fun ProjectCard(project: Project, onClick: () -> Unit, onLongClick: () -
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                summary(project),
+                canvasSummary(project),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -220,7 +220,8 @@ private fun ProjectCard(project: Project, onClick: () -> Unit, onLongClick: () -
     }
 }
 
-private fun summary(project: Project): String {
+/** "2 texts · 1 image · 5 min. ago · EPUB ready" */
+internal fun canvasSummary(project: Project): String {
     val texts = project.blocks.count { it is Block.Text }
     val images = project.blocks.count { it is Block.Image }
     val parts = buildList {

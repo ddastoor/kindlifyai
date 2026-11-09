@@ -35,6 +35,16 @@ fun KindlifyApp(vm: AppViewModel) {
     // Don't carry a message from one screen over to the next.
     LaunchedEffect(project?.id) { snackbar.currentSnackbarData?.dismiss() }
 
+    // Something was shared and there are several canvases: ask which one, over either screen.
+    vm.pendingShare?.let { pending ->
+        ShareTargetDialog(
+            pending = pending,
+            openId = project?.id,
+            onPick = vm::shareInto,
+            onCancel = vm::cancelShare,
+        )
+    }
+
     if (project == null) {
         HomeScreen(
             projects = vm.projects,

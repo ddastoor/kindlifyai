@@ -10,10 +10,12 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.core.content.FileProvider
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.github.ddastoor.kindlify.data.Block
+import io.github.ddastoor.kindlify.data.Project
 import io.github.ddastoor.kindlify.data.ProjectStore
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -26,8 +28,9 @@ import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
 /**
- * Sharing from another app (Android share sheet): with no canvas open it starts a new
- * canvas; with a canvas open it's appended to it, after a separator line.
+ * Sharing from another app (Android share sheet), by how many canvases there are:
+ * none → a new canvas; one → appended to it after a separator; several → you pick
+ * which one from a list (or Cancel).
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -100,6 +103,94 @@ class ShareToAppTest {
         assertEquals(2, project.blocks.size)
         assertTrue(project.blocks.all { it is Block.Image })
         assertTrue(project.title.startsWith("Untitled"))
+    }
+
+    @Test
+    fun sharedText_withOneSavedCanvas_opensItAndAppends() {
+        store.save(Project("only", "My only canvas", 1, 1_000, listOf(Block.Text("t", "Existing note"))))
+
+        share(textShare("Shared into the only canvas.", subject = "Some page"))
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Shared into the only canvas.")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("My only canvas").assertIsDisplayed()
+
+        compose.waitUntil(5_000) { store.load("only")!!.blocks.size == 3 }
+        val project = store.load("only")!!
+        assertEquals("Existing note", (project.blocks[0] as Block.Text).text)
+        assertEquals("Some page", (project.blocks[1] as Block.Separator).title)
+        assertEquals("Shared into the only canvas.", (project.blocks[2] as Block.Text).text)
+        assertEquals("no new canvas", 1, store.list().size)
+    }
+
+    @Test
+    fun sharedText_withSeveralCanvases_asksWhich_andAddsToThePickedOne() {
+        seedThreeCanvases()
+
+        share(textShare("Goes where I choose.", subject = "Chosen article"))
+        waitForPicker()
+        for (title in listOf("Canvas A", "Canvas B", "Canvas C")) compose.onNodeWithText(title).assertIsDisplayed()
+        compose.onNodeWithText("“Chosen article” will be added at the end, after a separator.").assertIsDisplayed()
+        compose.screenshot("14-share-pick-canvas")
+
+        compose.onNodeWithText("Canvas B").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Goes where I choose.")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Add to which canvas?").assertDoesNotExist()
+
+        compose.waitUntil(5_000) { store.load("b")!!.blocks.size == 3 }
+        assertEquals(listOf("Note A"), store.load("a")!!.blocks.map { (it as Block.Text).text })
+        assertEquals(listOf("Note C"), store.load("c")!!.blocks.map { (it as Block.Text).text })
+        val b = store.load("b")!!
+        assertEquals("Chosen article", (b.blocks[1] as Block.Separator).title)
+        assertEquals("Goes where I choose.", (b.blocks[2] as Block.Text).text)
+        assertEquals(3, store.list().size)
+    }
+
+    @Test
+    fun sharedText_withSeveralCanvases_cancelAddsNothing() {
+        seedThreeCanvases()
+
+        share(textShare("Never mind."))
+        waitForPicker()
+        compose.onNodeWithText("The shared 1 text will be added at the end, after a separator.").assertIsDisplayed()
+        compose.onNodeWithText("Cancel").performClick()
+
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Share cancelled. Nothing was added.")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Add to which canvas?").assertDoesNotExist()
+        compose.onNodeWithText("Never mind.").assertDoesNotExist()
+        assertEquals(3, store.list().size)
+        assertTrue(store.list().all { it.blocks.size == 1 })
+    }
+
+    @Test
+    fun sharedText_withACanvasOpenAndOthers_stillAsks_andKeepsTheOpenCanvasEdits() {
+        seedThreeCanvases()
+        // Open canvas A from the list and edit it, then share while it's open.
+        compose.onNodeWithText("New canvas").performClick()
+        compose.onNodeWithContentDescription("Back to all canvases").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Canvas A")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Canvas A").performClick()
+        compose.onNodeWithText("Note A").performTextInput("Edited ")
+
+        share(textShare("Into C please."))
+        waitForPicker()
+        compose.onNodeWithText("open now", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("Canvas C").performClick()
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Into C please.")).fetchSemanticsNodes().isNotEmpty() }
+
+        compose.waitUntil(5_000) { store.load("c")!!.blocks.size == 3 }
+        compose.waitUntil(5_000) { (store.load("a")!!.blocks.single() as Block.Text).text == "Edited Note A" }
+    }
+
+    /** The picker appears once the app has looked at the saved canvases (a background disk read). */
+    private fun waitForPicker() {
+        compose.waitUntil(5_000) {
+            runCatching { compose.onNodeWithText("Add to which canvas?").assertIsDisplayed() }.isSuccess
+        }
+    }
+
+    private fun seedThreeCanvases() {
+        store.save(Project("a", "Canvas A", 1, 3_000, listOf(Block.Text("ta", "Note A"))))
+        store.save(Project("b", "Canvas B", 2, 2_000, listOf(Block.Text("tb", "Note B"))))
+        store.save(Project("c", "Canvas C", 3, 1_000, listOf(Block.Text("tc", "Note C"))))
     }
 
     private fun textShare(text: String, subject: String? = null) =
