@@ -6,6 +6,9 @@ import android.content.ClipboardManager
 import android.content.Intent
 import android.os.Looper
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -24,7 +27,10 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import org.xmlpull.v1.XmlPullParser
 
-/** The launcher shortcuts: "Paste into latest canvas" and "New canvas from clipboard". */
+/**
+ * The launcher shortcuts: "Paste into a canvas" (the same choices as sharing) and
+ * "New canvas from clipboard".
+ */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w411dp-h891dp-xhdpi")
@@ -51,25 +57,63 @@ class ShortcutTest {
     }
 
     @Test
-    fun pasteIntoLatest_addsToTheMostRecentlyEditedCanvas() {
+    fun pasteIntoCanvas_asksWhichLikeSharing_andAppendsAfterSeparator() {
         store.save(Project("older", "Older canvas", 1, 1_000, listOf(Block.Text("o", "Older note"))))
         store.save(Project("newer", "Newer canvas", 2, 2_000, listOf(Block.Text("n", "Newer note"))))
         clipboard.setPrimaryClip(ClipData.newPlainText("text", "Added by the shortcut."))
 
-        shortcut(MainActivity.ACTION_PASTE_INTO_LATEST)
-        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Added by the shortcut.")).fetchSemanticsNodes().isNotEmpty() }
-        compose.waitUntil(5_000) { store.load("newer")!!.blocks.size == 2 }
+        shortcut(MainActivity.ACTION_PASTE_INTO_CANVAS)
+        compose.waitForCanvasPicker()
+        compose.onNodeWithText("The copied text goes at the end of the canvas you pick, after a separator, or into a new canvas.").assertIsDisplayed()
+        compose.pickerNewCanvas().assertIsDisplayed()
+        compose.onNodeWithText("Older canvas").assertIsDisplayed()
+        compose.screenshot("15-shortcut-pick-canvas")
+        compose.onNodeWithText("Newer canvas").performClick()
 
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Added by the shortcut.")).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(5_000) { store.load("newer")!!.blocks.size == 3 }
         val newer = store.load("newer")!!
-        assertEquals("appended like the Paste button, no separator", listOf("Newer note", "Added by the shortcut."), newer.blocks.map { (it as Block.Text).text })
+        assertEquals("Newer note", (newer.blocks[0] as Block.Text).text)
+        assertTrue("separator before the pasted content, as with sharing", newer.blocks[1] is Block.Separator)
+        assertEquals("Added by the shortcut.", (newer.blocks[2] as Block.Text).text)
         assertEquals(listOf("Older note"), store.load("older")!!.blocks.map { (it as Block.Text).text })
         assertEquals(2, store.list().size)
     }
 
     @Test
-    fun pasteIntoLatest_withNoCanvases_startsOne() {
+    fun pasteIntoCanvas_newCanvasInTheList() {
+        store.save(Project("only", "Only canvas", 1, 1_000, listOf(Block.Text("o", "Only note"))))
+        clipboard.setPrimaryClip(ClipData.newPlainText("text", "Into a fresh canvas."))
+
+        shortcut(MainActivity.ACTION_PASTE_INTO_CANVAS)
+        compose.waitForCanvasPicker()
+        compose.pickerNewCanvas().performClick()
+
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Into a fresh canvas.")).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(5_000) { store.list().size == 2 }
+        val fresh = store.list().single { it.id != "only" }
+        assertEquals(listOf("Into a fresh canvas."), fresh.blocks.map { (it as Block.Text).text })
+        assertEquals(listOf("Only note"), store.load("only")!!.blocks.map { (it as Block.Text).text })
+    }
+
+    @Test
+    fun pasteIntoCanvas_cancelAddsNothing() {
+        store.save(Project("only", "Only canvas", 1, 1_000, listOf(Block.Text("o", "Only note"))))
+        clipboard.setPrimaryClip(ClipData.newPlainText("text", "Not wanted."))
+
+        shortcut(MainActivity.ACTION_PASTE_INTO_CANVAS)
+        compose.waitForCanvasPicker()
+        compose.onNodeWithText("Cancel").performClick()
+
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("Paste cancelled. Nothing was added.")).fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(1, store.list().size)
+        assertEquals(listOf("Only note"), store.load("only")!!.blocks.map { (it as Block.Text).text })
+    }
+
+    @Test
+    fun pasteIntoCanvas_withNoCanvases_startsOne() {
         clipboard.setPrimaryClip(ClipData.newPlainText("text", "First ever note."))
-        shortcut(MainActivity.ACTION_PASTE_INTO_LATEST)
+        shortcut(MainActivity.ACTION_PASTE_INTO_CANVAS)
         // Wait on the screen (which also lets the app's main thread run), then check what was saved.
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("First ever note.")).fetchSemanticsNodes().isNotEmpty() }
         compose.waitUntil(5_000) { store.list().singleOrNull()?.blocks?.isNotEmpty() == true }
@@ -120,7 +164,7 @@ class ShortcutTest {
         }
         assertEquals(
             listOf(
-                MainActivity.ACTION_PASTE_INTO_LATEST to MainActivity::class.java.name,
+                MainActivity.ACTION_PASTE_INTO_CANVAS to MainActivity::class.java.name,
                 MainActivity.ACTION_PASTE_INTO_NEW to MainActivity::class.java.name,
             ),
             intents,

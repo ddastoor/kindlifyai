@@ -4,7 +4,12 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.AndroidComposeTestRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.core.content.FileProvider
 import org.robolectric.shadows.ShadowDialog
 import org.robolectric.shadows.ShadowLog
@@ -56,3 +61,12 @@ fun writeTestPhoto(file: File, width: Int = 3000, height: Int = 2000) {
     canvas.drawRect(0f, height * 0.7f, width.toFloat(), height.toFloat(), paint)
     file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.JPEG, 90, it) }
 }
+
+/** Waits until the "Add to which canvas?" list is on screen (it appears after a background disk read). */
+fun AndroidComposeTestRule<*, MainActivity>.waitForCanvasPicker() {
+    waitUntil(5_000) { runCatching { onNodeWithText("Add to which canvas?").assertIsDisplayed() }.isSuccess }
+}
+
+/** The "New canvas" entry in that list (the home screen has a "New canvas" button too). */
+fun AndroidComposeTestRule<*, MainActivity>.pickerNewCanvas() =
+    onNode(hasText("New canvas") and hasAnyAncestor(isDialog()))

@@ -11,8 +11,11 @@ A small, private Android app: collect text and images on a **canvas**, turn it i
     your canvases (the open one is marked). Tap a canvas to append the shared content after a
     separator line that starts a new chapter (named after the shared subject, if any); tap
     **New canvas** to start one with it; or **Cancel** to add nothing.
-- **Launcher shortcuts**: long-press the Kindlify icon for **Paste into latest canvas** (the open one,
-  else the most recently edited, else a new one) or **New canvas from clipboard**.
+- **Launcher shortcuts**: long-press the Kindlify icon for
+  - **Paste into a canvas**: the same choices as sharing. With no canvases it starts one; otherwise the
+    **Add to which canvas?** list (New canvas, your canvases, Cancel), and the clipboard goes at the end
+    of the canvas you pick, after a separator;
+  - **New canvas from clipboard**: straight into a new canvas (same as picking New canvas in that list).
 - **Fetch contents**: when a canvas holds nothing but a link, this button pulls in the page in
   "reader mode": the article's text and pictures, without ads, menus, side panels, comments or footers.
   It's added below the link (which is kept) after a separator that starts the article's own chapter,
@@ -42,7 +45,7 @@ Everything is saved as you go, in the app's private storage. The app only goes o
 
 ## Install
 
-The latest build is in the repo: [`apk/Kindlify.apk`](apk/Kindlify.apk) (version 1.7).
+The latest build is in the repo: [`apk/Kindlify.apk`](apk/Kindlify.apk) (version 1.8).
 On the phone, download it from
 <https://github.com/ddastoor/kindlifyai/raw/main/apk/Kindlify.apk>, open it, and allow installing apps
 from that source (your browser or Files app) when Android asks. Requires Android 10 or newer.
@@ -121,7 +124,8 @@ canvases) if the signature matches. Without `keystore.properties` the build fall
     dropped, pictures kept in order, EPUB created from it), and a page that can't be fetched;
   - keeping 20 canvases: starting the 21st removes the least recently edited;
   - long-press to delete one canvas, and Delete all;
-  - launcher shortcuts (including waiting for window focus before reading the clipboard);
+  - launcher shortcuts: "Paste into a canvas" offering the same list as sharing (pick, New canvas,
+    Cancel), and waiting for window focus before reading the clipboard;
   - when Fetch contents falls back to the browser (with a stand-in browser: Robolectric can't run a
     real WebView), and that canvases saved by older versions still load.
 - EPUB chapters, formatting and plain text staying plain, all checked with epubcheck.

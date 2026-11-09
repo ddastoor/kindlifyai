@@ -4,10 +4,8 @@ import android.app.Application
 import android.content.ClipData
 import android.content.Intent
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -70,15 +68,15 @@ class ShareToAppTest {
         // Even with a single canvas, the list is shown (with "New canvas"); pick the open one.
         // It's still empty, so no separator is needed in front of the first item.
         share(textShare("First shared paragraph."))
-        waitForPicker()
-        pickerNewCanvas().assertIsDisplayed()
+        compose.waitForCanvasPicker()
+        compose.pickerNewCanvas().assertIsDisplayed()
         compose.onNodeWithText("open now", substring = true).performClick()
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("First shared paragraph.")).fetchSemanticsNodes().isNotEmpty() }
 
         // Canvas now has content: the next share goes after a separator line, which starts a
         // new chapter named after the share's subject (the canvas keeps its own title).
         share(textShare("Second shared paragraph.", subject = "The second article"))
-        waitForPicker()
+        compose.waitForCanvasPicker()
         compose.onNodeWithText("open now", substring = true).performClick()
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("Second shared paragraph.")).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithContentDescription("Separator line").assertIsDisplayed()
@@ -118,8 +116,8 @@ class ShareToAppTest {
         store.save(Project("only", "My only canvas", 1, 1_000, listOf(Block.Text("t", "Existing note"))))
 
         share(textShare("Shared into the only canvas.", subject = "Some page"))
-        waitForPicker()
-        pickerNewCanvas().assertIsDisplayed()
+        compose.waitForCanvasPicker()
+        compose.pickerNewCanvas().assertIsDisplayed()
         compose.onNodeWithText("My only canvas").performClick()
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("Shared into the only canvas.")).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("My only canvas").assertIsDisplayed()
@@ -137,10 +135,10 @@ class ShareToAppTest {
         seedThreeCanvases()
 
         share(textShare("Goes where I choose.", subject = "Chosen article"))
-        waitForPicker()
+        compose.waitForCanvasPicker()
         for (title in listOf("Canvas A", "Canvas B", "Canvas C")) compose.onNodeWithText(title).assertIsDisplayed()
         compose.onNodeWithText("“Chosen article” goes at the end of the canvas you pick, after a separator, or into a new canvas.").assertIsDisplayed()
-        pickerNewCanvas().assertIsDisplayed()
+        compose.pickerNewCanvas().assertIsDisplayed()
         compose.screenshot("14-share-pick-canvas")
 
         compose.onNodeWithText("Canvas B").performClick()
@@ -161,8 +159,8 @@ class ShareToAppTest {
         seedThreeCanvases()
 
         share(textShare("Never mind."))
-        waitForPicker()
-        compose.onNodeWithText("The shared 1 text goes at the end of the canvas you pick, after a separator, or into a new canvas.").assertIsDisplayed()
+        compose.waitForCanvasPicker()
+        compose.onNodeWithText("The shared text goes at the end of the canvas you pick, after a separator, or into a new canvas.").assertIsDisplayed()
         compose.onNodeWithText("Cancel").performClick()
 
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("Share cancelled. Nothing was added.")).fetchSemanticsNodes().isNotEmpty() }
@@ -183,7 +181,7 @@ class ShareToAppTest {
         compose.onNodeWithText("Note A").performTextInput("Edited ")
 
         share(textShare("Into C please."))
-        waitForPicker()
+        compose.waitForCanvasPicker()
         compose.onNodeWithText("open now", substring = true).assertIsDisplayed()
         compose.onNodeWithText("Canvas C").performClick()
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("Into C please.")).fetchSemanticsNodes().isNotEmpty() }
@@ -197,9 +195,9 @@ class ShareToAppTest {
         seedThreeCanvases()
 
         share(textShare("Fresh start.", subject = "Fresh article"))
-        waitForPicker()
+        compose.waitForCanvasPicker()
         compose.onNodeWithText("Start a fresh canvas with it").assertIsDisplayed()
-        pickerNewCanvas().performClick()
+        compose.pickerNewCanvas().performClick()
 
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("Fresh start.")).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Add to which canvas?").assertDoesNotExist()
@@ -217,23 +215,13 @@ class ShareToAppTest {
         }
 
         share(textShare("One too many."))
-        waitForPicker()
+        compose.waitForCanvasPicker()
         compose.onNodeWithText("Removes your oldest canvas, “Canvas 1” (20 are kept)").assertIsDisplayed()
-        pickerNewCanvas().performClick()
+        compose.pickerNewCanvas().performClick()
 
         compose.waitUntil(5_000) { compose.onAllNodes(hasText("One too many.")).fetchSemanticsNodes().isNotEmpty() }
         compose.waitUntil(5_000) { store.load("canvas-1") == null }
         assertEquals(AppViewModel.MAX_CANVASES, store.list().size)
-    }
-
-    /** The "New canvas" entry in the picker (the home screen has a "New canvas" button too). */
-    private fun pickerNewCanvas() = compose.onNode(hasText("New canvas") and hasAnyAncestor(isDialog()))
-
-    /** The picker appears once the app has looked at the saved canvases (a background disk read). */
-    private fun waitForPicker() {
-        compose.waitUntil(5_000) {
-            runCatching { compose.onNodeWithText("Add to which canvas?").assertIsDisplayed() }.isSuccess
-        }
     }
 
     private fun seedThreeCanvases() {

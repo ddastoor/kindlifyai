@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">Kindlify</string>
     <string name="shortcut_paste_latest_short">Paste</string>
-    <string name="shortcut_paste_latest_long">Paste into latest canvas</string>
+    <string name="shortcut_paste_latest_long">Paste into a canvas</string>
     <string name="shortcut_paste_new_short">New + paste</string>
     <string name="shortcut_paste_new_long">New canvas from clipboard</string>
 </resources>

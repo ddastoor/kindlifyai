@@ -49,7 +49,7 @@ class MainActivity : ComponentActivity() {
         // Reopening from Recents replays the original intent; it was already handled.
         if (intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return
         when (intent.action) {
-            ACTION_PASTE_INTO_LATEST, ACTION_PASTE_INTO_NEW -> {
+            ACTION_PASTE_INTO_CANVAS, ACTION_PASTE_INTO_NEW -> {
                 intent.putExtra(EXTRA_SHARE_HANDLED, true)
                 pendingShortcut = intent.action
                 if (hasWindowFocus()) runPendingShortcut()
@@ -68,8 +68,11 @@ class MainActivity : ComponentActivity() {
         /** Marks a share or shortcut intent as handled, so it never runs twice. */
         const val EXTRA_SHARE_HANDLED = "io.github.ddastoor.kindlify.SHARE_HANDLED"
 
-        /** Launcher shortcuts (res/xml/shortcuts.xml). */
-        const val ACTION_PASTE_INTO_LATEST = "io.github.ddastoor.kindlify.action.PASTE_INTO_LATEST"
+        /**
+         * Launcher shortcuts (res/xml/shortcuts.xml). "Paste into a canvas" keeps its original
+         * action name, so a copy already pinned to the home screen keeps working.
+         */
+        const val ACTION_PASTE_INTO_CANVAS = "io.github.ddastoor.kindlify.action.PASTE_INTO_LATEST"
         const val ACTION_PASTE_INTO_NEW = "io.github.ddastoor.kindlify.action.PASTE_INTO_NEW"
     }
 }

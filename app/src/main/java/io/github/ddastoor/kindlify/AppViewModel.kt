@@ -96,7 +96,7 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
             .forEach { store.delete(it.id) }
     }
 
-    /** A share waiting for you to pick which canvas it goes into (when there are several). */
+    /** A share (or shortcut paste) waiting for you to pick which canvas it goes into. */
     var pendingShare by mutableStateOf<PendingShare?>(null)
         private set
 
@@ -116,18 +116,26 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
                 message("Nothing usable was shared. Kindlify takes text and images.")
                 return@launch
             }
-            val open = current
-            val saved = withContext(disk) { store.list() }
-            // The open canvas may have edits not saved yet: offer that copy rather than the one on disk.
-            val canvases = saved.map { if (open != null && it.id == open.id) open else it } +
-                listOfNotNull(open?.takeIf { o -> saved.none { it.id == o.id } })
-            if (canvases.isEmpty()) {
-                addAll(newCanvas(shared.subject), shared.items)
-            } else {
-                pendingShare = PendingShare(shared, canvases)
-            }
+            route(shared, fromClipboard = false)
         }
         return true
+    }
+
+    /**
+     * Where shared or shortcut-pasted content goes, the same for both: with no canvases yet it
+     * starts a new one; otherwise the "Add to which canvas?" list is shown.
+     */
+    private suspend fun route(content: SharedContent, fromClipboard: Boolean) {
+        val open = current
+        val saved = withContext(disk) { store.list() }
+        // The open canvas may have edits not saved yet: offer that copy rather than the one on disk.
+        val canvases = saved.map { if (open != null && it.id == open.id) open else it } +
+            listOfNotNull(open?.takeIf { o -> saved.none { it.id == o.id } })
+        if (canvases.isEmpty()) {
+            addAll(newCanvas(content.subject), content.items)
+        } else {
+            pendingShare = PendingShare(content, canvases, fromClipboard)
+        }
     }
 
     /** The canvas picked from the list for a pending share. */
@@ -144,11 +152,11 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
         addAll(newCanvas(pending.content.subject), pending.content.items)
     }
 
-    /** Cancel in the canvas list: the share is dropped and nothing changes. */
+    /** Cancel in the canvas list: the share (or paste) is dropped and nothing changes. */
     fun cancelShare() {
-        if (pendingShare == null) return
+        val pending = pendingShare ?: return
         pendingShare = null
-        message("Share cancelled. Nothing was added.")
+        message(if (pending.fromClipboard) "Paste cancelled. Nothing was added." else "Share cancelled. Nothing was added.")
     }
 
     /** Opens [target] (if it isn't already) and adds the share at the end, after a separator. */
@@ -241,10 +249,12 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
     }
 
     /**
-     * The launcher shortcuts: "Paste into latest canvas" (the open one, else the most recently
-     * edited, else a new one) and "New canvas from clipboard". Adds the clipboard the same way
-     * as the Paste button. Call only once the window has focus: Android lets an app read the
-     * clipboard only then.
+     * The launcher shortcuts. "Paste into a canvas" offers the same choices as sharing: with no
+     * canvases it starts one, otherwise the "Add to which canvas?" list (New canvas, your canvases,
+     * Cancel), and the clipboard goes at the end of the picked canvas after a separator.
+     * "New canvas from clipboard" ([intoNewCanvas]) goes straight to a new canvas, like picking
+     * "New canvas" in that list. Call only once the window has focus: Android lets an app read
+     * the clipboard only then.
      */
     fun pasteFromShortcut(intoNewCanvas: Boolean) {
         val items = runCatching { importer.readClipboard() }.getOrDefault(emptyList()) // read now, while focused
@@ -254,13 +264,11 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
                 message("The clipboard is empty. Copy some text or an image first.")
                 return@launch
             }
-            val target = when {
-                intoNewCanvas -> newCanvas()
-                else -> current
-                    ?: withContext(disk) { store.list().firstOrNull() }?.also { show(it) }
-                    ?: newCanvas()
+            if (intoNewCanvas) {
+                addAll(newCanvas(), items)
+            } else {
+                route(SharedContent(subject = null, items = items), fromClipboard = true)
             }
-            addAll(target, items)
         }
     }
 
@@ -467,5 +475,8 @@ class AppViewModel(app: Application, private val savedState: SavedStateHandle) :
     }
 }
 
-/** A share waiting for a canvas to be picked: what was shared, and the canvases to choose from (newest first). */
-data class PendingShare(val content: SharedContent, val choices: List<Project>)
+/**
+ * Content waiting for a canvas to be picked: what was shared (or pasted from the clipboard by the
+ * launcher shortcut), and the canvases to choose from (newest first).
+ */
+data class PendingShare(val content: SharedContent, val choices: List<Project>, val fromClipboard: Boolean = false)

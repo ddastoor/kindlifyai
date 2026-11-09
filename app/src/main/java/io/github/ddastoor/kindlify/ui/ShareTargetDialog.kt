@@ -147,8 +147,8 @@ private fun describe(pending: PendingShare): String {
     val texts = pending.content.items.count { it is Pasted.Text || it is Pasted.TextUri }
     val images = pending.content.items.count { it is Pasted.ImageUri }
     val parts = buildList {
-        if (texts > 0) add(if (texts == 1) "1 text" else "$texts texts")
-        if (images > 0) add(if (images == 1) "1 image" else "$images images")
+        if (texts > 0) add(if (texts == 1) "text" else "$texts texts")
+        if (images > 0) add(if (images == 1) "image" else "$images images")
     }
-    return "The shared " + parts.joinToString(" and ").ifEmpty { "item" }
+    return (if (pending.fromClipboard) "The copied " else "The shared ") + parts.joinToString(" and ").ifEmpty { "item" }
 }
